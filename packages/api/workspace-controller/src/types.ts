@@ -6,9 +6,9 @@
  */
 
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
+import type { WorkspaceId, WorkspaceWorktree } from '@deepseek-ai/dsh-workspace/types'
 
-export type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
+export type { WorkspaceId, WorkspaceWorktree } from '@deepseek-ai/dsh-workspace/types'
 export type { DirectoryEntry, DirectoryListing } from '@deepseek-ai/dsh-host-directory-picker/types'
 
 /** One durable Workspace projected for browser consumers. */
@@ -24,6 +24,12 @@ export interface WorkspaceView {
   readonly createdAt: string
   /** ISO-8601 last-mutation instant. */
   readonly updatedAt: string
+  /**
+   * Descriptor when this Workspace is a linked `git worktree` of another
+   * Workspace; absent for an ordinary directory Workspace, so the Client nests
+   * worktree rows without a second request.
+   */
+  readonly worktree?: WorkspaceWorktree
 }
 
 declare module '@deepseek-ai/dsh-typert-protocol' {

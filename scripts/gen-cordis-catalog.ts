@@ -130,6 +130,8 @@ export const SERVICE_PAGE: Record<string, string> = {
   workspaceFiles: 'workspace.md',
   terminalController: 'workspace.md',
   directoryPickerController: 'workspace.md',
+  gitWorktree: 'workspace.md',
+  gitWorktreeController: 'workspace.md',
 }
 
 /**
@@ -152,6 +154,7 @@ export const SERVICE_PAGE: Record<string, string> = {
  */
 export const SERVICE_WALK_EXEMPTIONS: Record<string, string> = {
   webTerminals: 'client-side terminal view models — packages/api/terminal-controller/README.md owns the API',
+  gitWorktrees: 'client-side worktree command facade — packages/api/git-worktree-controller/README.md owns the API',
   appReady: 'not a service: launcher-provided successful-startup signal — packages/boot/cmdline/README.md owns the launcher contract',
   appExit: 'not a service: launcher-provided bounded process-exit callback — packages/boot/cmdline/README.md owns the launcher contract',
   cmdlineArgs: 'not a service: launcher-provided immutable app argument accessor — packages/boot/cmdline/README.md owns the launcher contract',
@@ -644,6 +647,7 @@ export const LINK_MAP: Readonly<Record<string, string>> = {
   DomainChanged: 'storage.md',
   DomainFacility: 'storage.md',
   Workspace: 'workspace.md',
+  WorkspaceWorktreeCreate: 'workspace.md',
   WorkspaceArchiveSessionRequest: 'workspace.md',
   WorkspaceArchiveValue: 'workspace.md',
   WorkspaceCreateRequest: 'workspace.md',
@@ -793,6 +797,26 @@ export const TYPE_LINK_EXEMPTIONS: Readonly<Record<string, string>> = {
   WorkspaceFileRange: 'Host workspace file endpoint contract is owned by packages/api/workspace-files/README.md',
   WorkspaceFileStat: 'Host workspace file endpoint contract is owned by packages/api/workspace-files/README.md',
   WorkspaceFileText: 'Host workspace file endpoint contract is owned by packages/api/workspace-files/README.md',
+  GitWorktreeProbe: 'git-service worktree probe facts are owned by packages/workspace/workspace-worktree/README.md',
+  GitWorktreeEntry: 'git-service worktree list rows are owned by packages/workspace/workspace-worktree/README.md',
+  GitWorktreeStatus: 'git-service worktree status fields are owned by packages/workspace/workspace-worktree/README.md',
+  GitWorktreeMergeResult: 'git-service merge outcomes are owned by packages/workspace/workspace-worktree/README.md',
+  GitWorktreeRemoveRequest: 'git-service worktree removal input is owned by packages/workspace/workspace-worktree/README.md',
+  GitWorktreeRemoveValue: 'git-service worktree removal receipt is owned by packages/workspace/workspace-worktree/README.md',
+  GitWorktreeProbeRequest: 'Remote worktree probe input is owned by packages/api/git-worktree-controller/README.md',
+  GitWorktreeProbeValue: 'Remote worktree probe facts are owned by packages/api/git-worktree-controller/README.md',
+  GitWorktreeStatusValue: 'Remote worktree status fields are owned by packages/api/git-worktree-controller/README.md',
+  GitWorktreeMergeValue: 'Remote worktree merge outcome is owned by packages/api/git-worktree-controller/README.md',
+  GitWorktreeDiscardRequest: 'Remote worktree discard input is owned by packages/api/git-worktree-controller/README.md',
+  GitWorktreeDiscardValue: 'Remote worktree discard receipt is owned by packages/api/git-worktree-controller/README.md',
+  GitWorktreeCreateRequest:
+    'the git-service create input is owned by packages/workspace/workspace-worktree/README.md; the same-named Remote input, keyed by Workspace rather than path, is owned by packages/api/git-worktree-controller/README.md',
+  GitWorktreeCreateValue:
+    'the git-service create result is owned by packages/workspace/workspace-worktree/README.md; the same-named Remote result, which adds the Workspace id, is owned by packages/api/git-worktree-controller/README.md',
+  GitWorktreeStatusRequest:
+    'the git-service status input is owned by packages/workspace/workspace-worktree/README.md; the same-named Remote input, keyed by Workspace rather than path, is owned by packages/api/git-worktree-controller/README.md',
+  GitWorktreeMergeRequest:
+    'the git-service merge input is owned by packages/workspace/workspace-worktree/README.md; the same-named Remote input, keyed by Workspace rather than path, is owned by packages/api/git-worktree-controller/README.md',
   TerminalShell: 'Browser terminal shell profiles are owned by packages/api/terminal-controller/README.md',
   TerminalEnvironment: 'Browser terminal environment fields are owned by packages/api/terminal-controller/README.md',
   WebTerminalInfo: 'Browser terminal metadata is owned by packages/api/terminal-controller/README.md',

@@ -26,7 +26,7 @@ import {
   deriveFlat, deriveGroups, deriveSearchResults, orderByRecency, owningGroupKey,
   pinCurrentBlank, reconcileManualOrder, UNGROUPED_KEY, visibleSessionIds,
 } from '../tree.ts'
-import { ProjectRowItem, SearchResultItem, SessionNodeItem } from './Rows.tsx'
+import { ProjectRowItem, SearchResultItem, SessionNodeItem, WorktreeRowItem } from './Rows.tsx'
 import { FLAT_SESSION_ORDER_KEY } from '../stores.ts'
 import { WorkspacePickFlow } from '../WorkspacePicker.tsx'
 import css from './WorkspaceBrowser.module.css'
@@ -169,7 +169,7 @@ function workspaceGroupHalf(e: { clientY: number; currentTarget: HTMLElement }):
 type SessionTreeProps = Pick<
   WorkspaceBrowserProps,
   'useSessionPendingInteraction' | 'startSession' | 'open' | 'forkSession'
-  | 'insertWorkspaceBefore' | 't' | 'usePanelInfo'
+  | 'insertWorkspaceBefore' | 't' | 'usePanelInfo' | 'renderSlot'
 > & {
   /** Always-mounted Session list snapshot. */
   list: SessionListState
@@ -211,7 +211,7 @@ function SessionTree({
   onRenameRequest, onDeleteRequest, onSessionRename, onSessionArchive,
   insertWorkspaceBefore,
   groupExpansion, setGroupExpanded,
-  setSessionOrder, home, t,
+  setSessionOrder, home, t, renderSlot,
   revealSessionId, onSessionRevealed,
 }: SessionTreeProps) {
   const panelActive = usePanelInfo(info => info.activePanelId !== null)
@@ -418,6 +418,7 @@ function SessionTree({
                   }
                 }}
                 drag={workspaceDragProps}
+                renderActions={owner => renderSlot('sidebar.workspaces.projectActions', owner)}
                 actions={group.workspaceId === undefined
                   ? undefined
                   : {
@@ -493,6 +494,32 @@ function SessionTree({
                     : t('sessions.expand', { n: collapsed.hiddenCount })}
                 </button>
               )}
+              {group.children.map(child => (
+                <div key={child.key} className={css.worktreeSection}>
+                  <WorktreeRowItem
+                    group={child}
+                    t={t}
+                    onToggle={() => { setGroupExpanded(child.key, !child.expanded) }}
+                    renderRow={owner => renderSlot('sidebar.workspaces.worktreeRow', owner)}
+                  />
+                  {child.sessions.map(node => (
+                    <SessionNodeItem
+                      key={node.id}
+                      node={node}
+                      currentId={current}
+                      now={now}
+                      onOpen={open}
+                      onRename={onSessionRename}
+                      onFork={forkSession}
+                      onArchive={onSessionArchive}
+                      onReveal={node.id === revealSessionId && child.key === revealGroup
+                        ? () => { onSessionRevealed(node.id) }
+                        : undefined}
+                      t={t}
+                    />
+                  ))}
+                </div>
+              ))}
             </div>
           )
         })}
@@ -1225,6 +1252,7 @@ export function WorkspaceBrowser({
                 onSessionRevealed={acknowledgeSessionReveal}
                 home={home}
                 t={t}
+                renderSlot={renderSlot}
                 onRenameRequest={(workspaceId, currentTitle) => {
                   setRenameTarget({ workspaceId, currentTitle })
                   setRenameDraft(currentTitle)

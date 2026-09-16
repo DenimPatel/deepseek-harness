@@ -6,7 +6,7 @@
 import {
   type SessionListState, type SessionSearchResultItem, type SessionSummary,
 } from '@deepseek-ai/dsh-api-session-controller/client'
-import type { WorkspaceId, WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
+import type { WorkspaceId, WorkspaceView, WorkspaceWorktree } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type {
   SessionPendingInteractionBase,
 } from '@deepseek-ai/dsh-client-ui-session/client'
@@ -70,13 +70,17 @@ export interface GroupNode {
   /** Workspace creation time (epoch ms); absent only for the ungrouped bucket. */
   createdAt: number | undefined
   label: string
-  /** Total visible sessions in the group. */
+  /** Worktree descriptor when this group is a linked worktree of another group. */
+  worktree: WorkspaceWorktree | undefined
+  /** Total visible sessions in the group, including its nested worktree groups. */
   sessionCount: number
   expanded: boolean
-  /** The group contains the selected session (active folder tint; supplied here so the renderer never scans). */
+  /** The group or one of its nested worktree groups holds the selected session. */
   containsCurrent: boolean
   /** Visible session rows (empty while the group is folded). */
   sessions: readonly SessionNode[]
+  /** Nested worktree groups in Host order (empty while the group is folded). */
+  children: readonly GroupNode[]
 }
 
 /** One flat search row combining list metadata with an optional content match. */
@@ -115,6 +119,7 @@ interface Group {
   cwd: string | undefined
   createdAt: number | undefined
   label: string
+  worktree: WorkspaceWorktree | undefined
   sessions: SessionSummary[]
 }
 
@@ -227,9 +232,10 @@ function buildGroup(
   cwd: string | undefined,
   createdAt: number | undefined,
   label: string,
+  worktree: WorkspaceWorktree | undefined,
   members: readonly SessionSummary[],
 ): Group {
-  return { key, workspaceId, cwd, createdAt, label, sessions: [...members] }
+  return { key, workspaceId, cwd, createdAt, label, worktree, sessions: [...members] }
 }
 
 /** Apply a stored Ungrouped order and append newly loose Sessions by recency. */
@@ -274,7 +280,7 @@ function groupByWorkspace(
     }
     groups.push(buildGroup(
       workspace.workspaceId, workspace.workspaceId, workspace.path,
-      Date.parse(workspace.createdAt), workspace.title, members,
+      Date.parse(workspace.createdAt), workspace.title, workspace.worktree, members,
     ))
   }
   const stray = list.ids
@@ -288,6 +294,7 @@ function groupByWorkspace(
       undefined,
       undefined,
       '',
+      undefined,
       orderedUngrouped(stray, ungroupedOrder, list.byId),
     ))
   }
@@ -328,17 +335,19 @@ function sessionNode(
 /**
  * Derive the workspace browser groups with every session as a top-level row.
  *
- * Every group shows; sessions populate under expanded groups in the selected
- * local order. Blank sessions are excluded except for the selected
- * provisional New Session row; archived sessions are excluded everywhere.
- * Content search lives outside this derivation
- * (see {@link deriveSearchResults}).
+ * A group whose Worktree descriptor names an existing group nests under it;
+ * a group whose parent is absent (registration removed, listing not yet
+ * arrived) renders at top level rather than disappearing. Every group shows;
+ * sessions populate under expanded groups in the selected local order. Blank
+ * sessions are excluded except for the selected provisional New Session row;
+ * archived sessions are excluded everywhere. Content search lives outside this
+ * derivation (see {@link deriveSearchResults}).
  * @param list - sessions list snapshot (`current` feeds containsCurrent).
  * @param workspaces - real Workspaces in Host group order with caller-projected Session order.
  * @param archivedSessionIds - registry-global archive set.
  * @param pendingInteractions - pending UI interactions by Session.
  * @param view - local expansion arrays.
- * @returns group sections in render order.
+ * @returns top-level group sections in render order, each with its nested worktrees.
  */
 export function deriveGroups(
   list: SessionListState,
@@ -353,24 +362,60 @@ export function deriveGroups(
   const currentGroup = list.current === undefined
     ? undefined
     : owningGroupKey(workspaces, list.current)
-  const groups: GroupNode[] = []
-  for (const g of groupByWorkspace(list, workspaces, archived, view.ungroupedOrder)) {
-    const expanded = expandedGroups.has(g.key)
-    groups.push({
-      key: g.key,
-      workspaceId: g.workspaceId,
-      cwd: g.cwd,
-      createdAt: g.createdAt,
-      label: g.label,
-      sessionCount: g.sessions.length,
-      expanded,
-      containsCurrent: g.key === currentGroup,
-      sessions: expanded
-        ? g.sessions.map(session => sessionNode(session, descendants, pendingInteractions))
-        : [],
-    })
+  const flat = groupByWorkspace(list, workspaces, archived, view.ungroupedOrder)
+  const byKey = new Map(flat.map(group => [group.key, group]))
+  const roots: Group[] = []
+  const childrenOf = new Map<string, Group[]>()
+  for (const group of flat) {
+    // A worktree is never itself a parent: the worktree service refuses a
+    // linked worktree as the repository for another, so the chain has no cycle.
+    const parentKey = group.worktree?.parentWorkspaceId
+    if (parentKey === undefined || parentKey === group.key || !byKey.has(parentKey)) {
+      roots.push(group)
+      continue
+    }
+    const siblings = childrenOf.get(parentKey)
+    if (siblings === undefined) childrenOf.set(parentKey, [group])
+    else siblings.push(group)
   }
-  return groups
+  const build = (group: Group): GroupNode => {
+    const expanded = expandedGroups.has(group.key)
+    const children = (childrenOf.get(group.key) ?? []).map(build)
+    return {
+      key: group.key,
+      workspaceId: group.workspaceId,
+      cwd: group.cwd,
+      createdAt: group.createdAt,
+      label: group.label,
+      worktree: group.worktree,
+      sessionCount: group.sessions.length
+        + children.reduce((total, child) => total + child.sessionCount, 0),
+      expanded,
+      containsCurrent: group.key === currentGroup || children.some(child => child.containsCurrent),
+      sessions: expanded
+        ? group.sessions.map(session => sessionNode(session, descendants, pendingInteractions))
+        : [],
+      children: expanded ? children : [],
+    }
+  }
+  return roots.map(build)
+}
+
+/**
+ * Search and hover label for one group: a worktree reads as its parent's title
+ * plus the branch it holds, so two worktrees of one project stay distinct.
+ * @param workspace - the Workspace being labelled.
+ * @param byId - the caller's Workspace set, used to resolve a parent title.
+ * @returns the display label.
+ */
+function worktreeGroupLabel(
+  workspace: WorkspaceView,
+  byId: ReadonlyMap<string, WorkspaceView>,
+): string {
+  const worktree = workspace.worktree
+  if (worktree === undefined) return workspace.title
+  const parent = byId.get(worktree.parentWorkspaceId)
+  return `${parent?.title ?? workspace.title} · ${worktree.branch}`
 }
 
 /**
@@ -410,7 +455,9 @@ export function deriveFlat(
 /**
  * Merge immediate title/Workspace substring matches with ranked Host content
  * matches. Local rows lead newest-first, content-only rows retain backend
- * order, and duplicate sessions receive the backend snippet in place.
+ * order, and duplicate sessions receive the backend snippet in place. A
+ * worktree Session's Workspace label is `<parent title> · <branch>`, so two
+ * worktrees of one project are told apart in a flat list.
  * @param list - session metadata authority.
  * @param workspaces - Workspace membership and display labels.
  * @param query - caller text; surrounding whitespace is ignored.
@@ -434,10 +481,12 @@ export function deriveSearchResults(
   const archived = new Set(archivedSessionIds)
   const descendants = indexSubagentDescendants(list.byId)
 
+  const workspacesById = new Map(workspaces.map(workspace => [workspace.workspaceId as string, workspace]))
   const workspaceBySession = new Map<SessionId, string>()
   for (const workspace of workspaces) {
+    const label = worktreeGroupLabel(workspace, workspacesById)
     for (const sessionId of workspace.sessionIds) {
-      if (!workspaceBySession.has(sessionId)) workspaceBySession.set(sessionId, workspace.title)
+      if (!workspaceBySession.has(sessionId)) workspaceBySession.set(sessionId, label)
     }
   }
   const labelOf = (summary: SessionSummary): string =>

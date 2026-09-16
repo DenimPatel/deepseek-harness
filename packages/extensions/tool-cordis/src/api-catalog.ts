@@ -1021,6 +1021,91 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'gitWorktree',
+    summary: 'Linked-worktree operations over one repository.',
+    description: 'Linked-worktree operations over one repository. The service holds no cache: every call observes the repository as it is now, because a worktree can be removed or checked out by anything else on the machine.',
+    methods: [
+      {
+        signature: 'async probe(path: string): Promise<GitWorktreeProbe>',
+        description: 'Observe one directory without mutating anything. Never throws for a missing git or a non-repository path: those are reported facts.',
+        parameters: [{ name: 'path', description: 'Absolute directory to observe.' }],
+        returns: 'what the directory currently is.',
+      },
+      {
+        signature: 'async create(request: GitWorktreeCreateRequest): Promise<GitWorktreeCreateValue>',
+        description: 'Create one linked worktree under the configured root, on a new branch cut from `baseRef`, then run the configured copy and setup steps.',
+        parameters: [{ name: 'request', description: 'parent repository, worktree name, and base revision.' }],
+        returns: 'the created directory, branch, and base revision.',
+        throws: ['GitWorktreeError with `git-unavailable`, `not-a-repository`, `unsupported-parent`, `invalid-name`, `path-exists`, `branch-exists`, `create-failed`, or `setup-failed`.'],
+      },
+      {
+        signature: 'async list(repoPath: string): Promise<GitWorktreeEntry[]>',
+        description: 'List every worktree of one repository.',
+        parameters: [{ name: 'repoPath', description: 'Any directory inside the parent repository.' }],
+        returns: 'one entry per registered worktree, in git\'s own order.',
+        throws: ['GitWorktreeError when the path is not a repository.'],
+      },
+      {
+        signature: 'async status(request: GitWorktreeStatusRequest): Promise<GitWorktreeStatus>',
+        description: 'Observe one linked worktree relative to a base revision.',
+        parameters: [{ name: 'request', description: 'worktree directory and the revision to compare against.' }],
+        returns: 'working-tree changes plus ahead/behind counts.',
+        throws: ['GitWorktreeError with `not-found` when the directory is gone.'],
+      },
+      {
+        signature: 'async merge(request: GitWorktreeMergeRequest): Promise<GitWorktreeMergeResult>',
+        description: 'Merge one worktree branch into the parent repository\'s target ref. Refuses while the parent tree is dirty or mid-operation, and aborts on conflict so the parent is never left half-merged.',
+        parameters: [{ name: 'request', description: 'parent repository, branch, and optional target ref.' }],
+        returns: 'whether the merge landed, or the conflicting paths.',
+        throws: ['GitWorktreeError with `parent-dirty`, `parent-busy`, or `merge-failed`.'],
+      },
+      {
+        signature: 'async remove(request: GitWorktreeRemoveRequest): Promise<GitWorktreeRemoveValue>',
+        description: 'Remove one linked worktree and its branch. The directory is removed first and the branch second, so a failure never leaves a branch whose checkout still exists.',
+        parameters: [{ name: 'request', description: 'parent repository, worktree directory, branch, and force.' }],
+        returns: 'removal receipt.',
+        throws: ['GitWorktreeError with `remove-failed`.'],
+      },
+    ],
+  },
+  {
+    key: 'gitWorktreeController',
+    summary: 'Host service backing the generated `ctx.remote.gitWorktree` namespace.',
+    description: 'Host service backing the generated `ctx.remote.gitWorktree` namespace.',
+    methods: [
+      {
+        signature: '@Remote(\'probe\') async probe(request: GitWorktreeProbeRequest): Promise<GitWorktreeProbeValue>',
+        description: 'Observe one directory without mutating anything.',
+        parameters: [{ name: 'request', description: 'absolute directory to observe.' }],
+        returns: 'whether git is usable, whether the directory is a repository, and its state.',
+      },
+      {
+        signature: '@Remote(\'create\') async create(request: GitWorktreeCreateRequest): Promise<GitWorktreeCreateValue>',
+        description: 'Create one linked worktree from a registered Workspace and register the checkout as a Workspace of its own.',
+        parameters: [{ name: 'request', description: 'parent Workspace, worktree name, and optional base ref.' }],
+        returns: 'the new Worktree Workspace plus its checkout facts.',
+      },
+      {
+        signature: '@Remote(\'status\') async status(request: GitWorktreeStatusRequest): Promise<GitWorktreeStatusValue>',
+        description: 'Read the working-tree state of one worktree Workspace.',
+        parameters: [{ name: 'request', description: 'the worktree Workspace.' }],
+        returns: 'changes, ahead/behind counts, and conflicts, or a `missing` report.',
+      },
+      {
+        signature: '@Remote(\'merge\') merge(request: GitWorktreeMergeRequest): Promise<GitWorktreeMergeValue>',
+        description: 'Merge one worktree branch into its parent repository.',
+        parameters: [{ name: 'request', description: 'the worktree Workspace.' }],
+        returns: 'whether the merge landed, and the conflicting paths when it did not.',
+      },
+      {
+        signature: '@Remote(\'discard\') async discard(request: GitWorktreeDiscardRequest): Promise<GitWorktreeDiscardValue>',
+        description: 'Remove one worktree checkout, its branch, and its Workspace registration. Session logs are never touched: removing a registration leaves every session that ran in the directory in place, ungrouped.',
+        parameters: [{ name: 'request', description: 'the worktree Workspace and whether to discard its changes.' }],
+        returns: 'discard confirmation.',
+      },
+    ],
+  },
+  {
     key: 'goals',
     summary: 'Goal service (`ctx.goals`) backed exclusively by the owning session log.',
     description: 'Goal service (`ctx.goals`) backed exclusively by the owning session log.',
@@ -3115,6 +3200,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the existing or newly durable workspace.',
       },
       {
+        signature: 'createWorktree(input: WorkspaceWorktreeCreate): Promise<Workspace>',
+        description: 'Create or reuse a workspace over an existing directory that is a linked `git worktree` of another workspace. The descriptor is written in the same single create write as the rest of the record, so an interrupted create never leaves a workspace half-described. The parent workspace must be registered; the directory must already exist and is the caller\'s responsibility to create.',
+        parameters: [{ name: 'input', description: 'worktree directory, display title, and descriptor.' }],
+        returns: 'the newly durable, or already registered, workspace.',
+      },
+      {
         signature: 'get(id: WorkspaceId): Workspace | undefined',
         description: 'Look up a workspace by id.',
         parameters: [{ name: 'id', description: 'Workspace id.' }],
@@ -4433,6 +4524,54 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'GenericResultView',
     declaration: 'export interface GenericResultView {\n    card: \'generic\';\n    title?: string;\n    content?: ContentBlock[];\n}',
+  },
+  {
+    name: 'GitWorktreeDiscardRequest',
+    declaration: 'export interface GitWorktreeDiscardRequest {\n    readonly workspaceId: WorkspaceId;\n    readonly force: boolean;\n}',
+  },
+  {
+    name: 'GitWorktreeDiscardValue',
+    declaration: 'export interface GitWorktreeDiscardValue {\n    readonly discarded: true;\n}',
+  },
+  {
+    name: 'GitWorktreeEntry',
+    declaration: 'export interface GitWorktreeEntry {\n    readonly path: string;\n    readonly branch: string | undefined;\n    readonly head: string | undefined;\n    readonly isMain: boolean;\n}',
+  },
+  {
+    name: 'GitWorktreeMergeResult',
+    declaration: 'export type GitWorktreeMergeResult = {\n    readonly outcome: \'merged\';\n    readonly targetRef: string;\n    readonly revision: string;\n} | {\n    readonly outcome: \'conflict\';\n    readonly targetRef: string;\n    readonly conflicts: readonly string[];\n};',
+  },
+  {
+    name: 'GitWorktreeMergeValue',
+    declaration: 'export interface GitWorktreeMergeValue {\n    readonly merged: boolean;\n    readonly targetRef: string;\n    readonly conflicts: readonly string[];\n}',
+  },
+  {
+    name: 'GitWorktreeProbe',
+    declaration: 'export interface GitWorktreeProbe {\n    readonly gitAvailable: boolean;\n    readonly isRepository: boolean;\n    readonly isMainWorktree: boolean;\n    readonly branch: string | undefined;\n    readonly head: string | undefined;\n    readonly dirty: boolean;\n    readonly setupCommand: string | undefined;\n}',
+  },
+  {
+    name: 'GitWorktreeProbeRequest',
+    declaration: 'export interface GitWorktreeProbeRequest {\n    readonly path: string;\n}',
+  },
+  {
+    name: 'GitWorktreeProbeValue',
+    declaration: 'export interface GitWorktreeProbeValue {\n    readonly gitAvailable: boolean;\n    readonly isRepository: boolean;\n    readonly isMainWorktree: boolean;\n    readonly branch?: string;\n    readonly head?: string;\n    readonly dirty: boolean;\n    readonly setupCommand?: string;\n}',
+  },
+  {
+    name: 'GitWorktreeRemoveRequest',
+    declaration: 'export interface GitWorktreeRemoveRequest {\n    readonly repoPath: string;\n    readonly path: string;\n    readonly branch: string;\n    readonly force: boolean;\n}',
+  },
+  {
+    name: 'GitWorktreeRemoveValue',
+    declaration: 'export interface GitWorktreeRemoveValue {\n    readonly removed: true;\n}',
+  },
+  {
+    name: 'GitWorktreeStatus',
+    declaration: 'export interface GitWorktreeStatus {\n    readonly dirty: boolean;\n    readonly changedFiles: readonly string[];\n    readonly commitsAhead: number;\n    readonly commitsBehind: number;\n    readonly conflicts: readonly string[];\n}',
+  },
+  {
+    name: 'GitWorktreeStatusValue',
+    declaration: 'export interface GitWorktreeStatusValue {\n    readonly missing: boolean;\n    readonly dirty: boolean;\n    readonly changedFiles: readonly string[];\n    readonly commitsAhead: number;\n    readonly commitsBehind: number;\n    readonly conflicts: readonly string[];\n}',
   },
   {
     name: 'GoalActivation',
@@ -6636,7 +6775,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'Workspace',
-    declaration: 'export interface Workspace {\n    readonly id: WorkspaceId;\n    readonly path: string;\n    readonly title: string;\n    readonly createdAt: string;\n    readonly updatedAt: string;\n    readonly sessionIds: readonly SessionId[];\n    setTitle(title: string): Promise<void>;\n    attachSession(sessionId: SessionId): Promise<void>;\n    insertSessionBefore(sessionId: SessionId, beforeSessionId?: SessionId): Promise<void>;\n    detachSession(sessionId: SessionId): Promise<void>;\n    status(): Promise<\'ok\' | \'missing-dir\'>;\n}',
+    declaration: 'export interface Workspace {\n    readonly id: WorkspaceId;\n    readonly path: string;\n    readonly title: string;\n    readonly createdAt: string;\n    readonly updatedAt: string;\n    readonly worktree: WorkspaceWorktree | undefined;\n    readonly sessionIds: readonly SessionId[];\n    setTitle(title: string): Promise<void>;\n    attachSession(sessionId: SessionId): Promise<void>;\n    insertSessionBefore(sessionId: SessionId, beforeSessionId?: SessionId): Promise<void>;\n    detachSession(sessionId: SessionId): Promise<void>;\n    status(): Promise<\'ok\' | \'missing-dir\'>;\n}',
   },
   {
     name: 'WorkspaceArchiveSessionRequest',
@@ -6740,7 +6879,15 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'WorkspaceView',
-    declaration: 'export interface WorkspaceView {\n    readonly workspaceId: WorkspaceId;\n    readonly path: string;\n    readonly title: string;\n    readonly sessionIds: readonly SessionId[];\n    readonly createdAt: string;\n    readonly updatedAt: string;\n}',
+    declaration: 'export interface WorkspaceView {\n    readonly workspaceId: WorkspaceId;\n    readonly path: string;\n    readonly title: string;\n    readonly sessionIds: readonly SessionId[];\n    readonly createdAt: string;\n    readonly updatedAt: string;\n    readonly worktree?: WorkspaceWorktree;\n}',
+  },
+  {
+    name: 'WorkspaceWorktree',
+    declaration: 'export interface WorkspaceWorktree {\n    readonly parentWorkspaceId: WorkspaceId;\n    readonly repoPath: string;\n    readonly branch: string;\n    readonly baseBranch: string;\n    readonly baseRevision: string;\n}',
+  },
+  {
+    name: 'WorkspaceWorktreeCreate',
+    declaration: 'export interface WorkspaceWorktreeCreate extends WorkspaceWorktree {\n    readonly path: string;\n    readonly title?: string;\n}',
   },
 ]
 

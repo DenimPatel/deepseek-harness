@@ -15,9 +15,26 @@ import type { WorkspaceId } from './types.ts'
 const workspaceId = z.string().transform(value => value as WorkspaceId)
 
 /**
+ * Durable description of one workspace that is a linked `git worktree` of
+ * another workspace. `repoPath` is the parent repository's main worktree
+ * directory; `branch` is the branch checked out here; `baseBranch` and
+ * `baseRevision` record what that branch was cut from, so a review surface can
+ * state the merge base without re-reading git at render time.
+ */
+export const workspaceWorktree = z.object({
+  parentWorkspaceId: workspaceId,
+  repoPath: z.string(),
+  branch: z.string(),
+  baseBranch: z.string(),
+  baseRevision: z.string(),
+})
+
+/**
  * Durable shape of one workspace record. `path` is the `fs.realpath` canon
  * stamped at create; `sessionIds` is the ordered ownership account (array
- * order is display order); timestamps are ISO-8601 strings.
+ * order is display order); timestamps are ISO-8601 strings. `worktree` is
+ * absent for an ordinary directory workspace, and optional so records written
+ * before the field parse unchanged.
  */
 export const workspaceRecord = z.object({
   path: z.string(),
@@ -25,6 +42,7 @@ export const workspaceRecord = z.object({
   sessionIds: z.array(z.string().transform(value => brandString<SessionId>(value))),
   createdAt: z.string(),
   updatedAt: z.string(),
+  worktree: workspaceWorktree.optional(),
 })
 
 /** One stored workspace record, inferred from {@link workspaceRecord}. */
@@ -67,6 +85,10 @@ export type WorkspaceDomainState = z.infer<typeof workspaceDomainState>
  */
 export const workspaceDomainSpec = defineDomain({
   name: 'workspace',
+  // Stays 2: `worktree` is optional and defaults to absent, so records written
+  // by version 2 parse unchanged and version-2 readers silently drop the added
+  // key. A `single`-layout unit reads exact-version only (storage/src/backend.ts),
+  // so bumping here would reject every existing registry instead of upgrading it.
   version: 2,
   global: {
     schema: workspaceDomainState,

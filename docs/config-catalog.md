@@ -3583,12 +3583,53 @@ export interface Config {
 
 Source: [`packages/workflow/workflow-ptc/src/index.ts:32`](../packages/workflow/workflow-ptc/src/index.ts)
 
+<a id="deepseek-aidsh-workspace-worktree"></a>
+
+## `@deepseek-ai/dsh-workspace-worktree`
+
+Requires: `subprocess`
+
+```ts config-catalog
+/**
+ * Worktree service configuration. Every field is a deployment choice with no
+ * encoded default: an unset `worktreeRoot` derives a sibling directory from
+ * the repository, an unset `setupCommand`/`copyGlobs` runs nothing, and an
+ * unset `branchPrefix` leaves created branches unprefixed.
+ */
+export interface Config {
+  /**
+   * Directory holding every worktree this service creates. Defaults to the
+   * sibling `<repo parent>/<repo name>.worktrees`.
+   */
+  readonly worktreeRoot?: string
+  /**
+   * Shell command run inside a freshly created worktree, after `copyGlobs`.
+   * Unset runs nothing; a failure keeps the worktree and reports
+   * `setup-failed` so a Session can still start and be repaired by hand.
+   * Operator configuration, never derived from a worktree or branch name.
+   */
+  readonly setupCommand?: string
+  /**
+   * Repository-relative glob patterns whose tracked files are copied into a
+   * freshly created worktree. Unset copies nothing.
+   */
+  readonly copyGlobs?: string[]
+  /** Prefix prepended to every created branch name. Unset adds none. */
+  readonly branchPrefix?: string
+  /** Git executable to invoke. Defaults to `git` resolved through `PATH`. */
+  readonly gitExecutable?: string
+}
+```
+
+Source: [`packages/workspace/workspace-worktree/src/index.ts:49`](../packages/workspace/workspace-worktree/src/index.ts)
+
 ## Loadable plugins with no config
 
 These load from a `cordis.yml` entry with no `config:` block; they declare no configuration API.
 
 - `@deepseek-ai/dsh-acp-app` — requires `cmdlineArgs` ([`packages/bundle/acp-app/src/index.ts`](../packages/bundle/acp-app/src/index.ts))
 - `@deepseek-ai/dsh-agent` ([`packages/core/agent/src/index.ts`](../packages/core/agent/src/index.ts))
+- `@deepseek-ai/dsh-api-git-worktree-controller` — requires `typert` · `workspaceRegistry` · `gitWorktree` ([`packages/api/git-worktree-controller/src/index.ts`](../packages/api/git-worktree-controller/src/index.ts))
 - `@deepseek-ai/dsh-api-remotes` — requires `typertGateway` ([`packages/api/remotes/src/index.ts`](../packages/api/remotes/src/index.ts))
 - `@deepseek-ai/dsh-api-workspace-controller` — requires `typert` · `workspaceRegistry` ([`packages/api/workspace-controller/src/index.ts`](../packages/api/workspace-controller/src/index.ts))
 - `@deepseek-ai/dsh-authorization` — requires `credentials` ([`packages/credentials/authorization/src/index.ts`](../packages/credentials/authorization/src/index.ts))
@@ -3640,6 +3681,7 @@ These load from a `cordis.yml` entry with no `config:` block; they declare no co
 - `@deepseek-ai/dsh-client-ui-user-questions` ([`packages/client/ui-user-questions/src/index.ts`](../packages/client/ui-user-questions/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-workflow-run` ([`packages/client/ui-workflow-run/src/index.ts`](../packages/client/ui-workflow-run/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-workspace` ([`packages/client/ui-workspace/src/index.ts`](../packages/client/ui-workspace/src/index.ts))
+- `@deepseek-ai/dsh-client-ui-workspace-worktree` ([`packages/client/ui-workspace-worktree/src/index.ts`](../packages/client/ui-workspace-worktree/src/index.ts))
 - `@deepseek-ai/dsh-command-compact` — requires `commands` · `compaction` ([`packages/compaction/command-compact/src/index.ts`](../packages/compaction/command-compact/src/index.ts))
 - `@deepseek-ai/dsh-command-feedback` — requires `commands` ([`packages/feedback/command-feedback/src/index.ts`](../packages/feedback/command-feedback/src/index.ts))
 - `@deepseek-ai/dsh-command-goal` — requires `commands` · `goals` ([`packages/goal/command-goal/src/index.ts`](../packages/goal/command-goal/src/index.ts))

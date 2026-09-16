@@ -3585,12 +3585,53 @@ export interface Config {
 
 来源： [`packages/workflow/workflow-ptc/src/index.ts:32`](../packages/workflow/workflow-ptc/src/index.ts)
 
+<a id="deepseek-aidsh-workspace-worktree"></a>
+
+## `@deepseek-ai/dsh-workspace-worktree`
+
+需要：`subprocess`
+
+```ts config-catalog
+/**
+ * Worktree service configuration. Every field is a deployment choice with no
+ * encoded default: an unset `worktreeRoot` derives a sibling directory from
+ * the repository, an unset `setupCommand`/`copyGlobs` runs nothing, and an
+ * unset `branchPrefix` leaves created branches unprefixed.
+ */
+export interface Config {
+  /**
+   * Directory holding every worktree this service creates. Defaults to the
+   * sibling `<repo parent>/<repo name>.worktrees`.
+   */
+  readonly worktreeRoot?: string
+  /**
+   * Shell command run inside a freshly created worktree, after `copyGlobs`.
+   * Unset runs nothing; a failure keeps the worktree and reports
+   * `setup-failed` so a Session can still start and be repaired by hand.
+   * Operator configuration, never derived from a worktree or branch name.
+   */
+  readonly setupCommand?: string
+  /**
+   * Repository-relative glob patterns whose tracked files are copied into a
+   * freshly created worktree. Unset copies nothing.
+   */
+  readonly copyGlobs?: string[]
+  /** Prefix prepended to every created branch name. Unset adds none. */
+  readonly branchPrefix?: string
+  /** Git executable to invoke. Defaults to `git` resolved through `PATH`. */
+  readonly gitExecutable?: string
+}
+```
+
+来源： [`packages/workspace/workspace-worktree/src/index.ts:49`](../packages/workspace/workspace-worktree/src/index.ts)
+
 ## 无配置的可加载插件
 
 这些插件通过 `cordis.yml` 中不含 `config:` 块的条目加载；它们未声明任何配置接口。
 
 - `@deepseek-ai/dsh-acp-app` — 需要 `cmdlineArgs`（[`packages/bundle/acp-app/src/index.ts`](../packages/bundle/acp-app/src/index.ts)）
 - `@deepseek-ai/dsh-agent`（[`packages/core/agent/src/index.ts`](../packages/core/agent/src/index.ts)）
+- `@deepseek-ai/dsh-api-git-worktree-controller` — 需要 `typert` · `workspaceRegistry` · `gitWorktree`（[`packages/api/git-worktree-controller/src/index.ts`](../packages/api/git-worktree-controller/src/index.ts)）
 - `@deepseek-ai/dsh-api-remotes` — 需要 `typertGateway`（[`packages/api/remotes/src/index.ts`](../packages/api/remotes/src/index.ts)）
 - `@deepseek-ai/dsh-api-workspace-controller` — 需要 `typert` · `workspaceRegistry`（[`packages/api/workspace-controller/src/index.ts`](../packages/api/workspace-controller/src/index.ts)）
 - `@deepseek-ai/dsh-authorization` — 需要 `credentials`（[`packages/credentials/authorization/src/index.ts`](../packages/credentials/authorization/src/index.ts)）
@@ -3642,6 +3683,7 @@ export interface Config {
 - `@deepseek-ai/dsh-client-ui-user-questions`（[`packages/client/ui-user-questions/src/index.ts`](../packages/client/ui-user-questions/src/index.ts)）
 - `@deepseek-ai/dsh-client-ui-workflow-run`（[`packages/client/ui-workflow-run/src/index.ts`](../packages/client/ui-workflow-run/src/index.ts)）
 - `@deepseek-ai/dsh-client-ui-workspace`（[`packages/client/ui-workspace/src/index.ts`](../packages/client/ui-workspace/src/index.ts)）
+- `@deepseek-ai/dsh-client-ui-workspace-worktree`（[`packages/client/ui-workspace-worktree/src/index.ts`](../packages/client/ui-workspace-worktree/src/index.ts)）
 - `@deepseek-ai/dsh-command-compact` — 需要 `commands` · `compact`（[`packages/compaction/command-compact/src/index.ts`](../packages/compaction/command-compact/src/index.ts)）
 - `@deepseek-ai/dsh-command-feedback` — 需要 `commands`（[`packages/feedback/command-feedback/src/index.ts`](../packages/feedback/command-feedback/src/index.ts)）
 - `@deepseek-ai/dsh-command-goal` — 需要 `commands` · `goals`（[`packages/goal/command-goal/src/index.ts`](../packages/goal/command-goal/src/index.ts)）
