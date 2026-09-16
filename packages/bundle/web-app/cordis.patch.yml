@@ -236,6 +236,11 @@
     - id: ui-sidebar-files
       name: '@deepseek-ai/dsh-client-ui-sidebar-files'
 
+    # The right Sidebar's observability dashboard: read-side token, timing,
+    # provider/model, and sub-agent views over existing session projections.
+    - id: ui-observability
+      name: '@deepseek-ai/dsh-client-ui-observability'
+
     - id: ui-settings
       name: '@deepseek-ai/dsh-client-ui-settings'
 
