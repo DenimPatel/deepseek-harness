@@ -23,6 +23,36 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
 }
 
 /**
+ * Durable description of one workspace that is a linked `git worktree` of
+ * another workspace. The record stays an ordinary workspace in every other
+ * respect, so membership, persistence, and grouping treat it by its
+ * {@link Workspace.path} alone.
+ */
+export interface WorkspaceWorktree {
+  /** Workspace owning the repository this worktree was cut from. */
+  readonly parentWorkspaceId: WorkspaceId
+  /** Canonical directory of the parent repository's main worktree. */
+  readonly repoPath: string
+  /** Branch checked out in this worktree. */
+  readonly branch: string
+  /** Branch the worktree branch was cut from. */
+  readonly baseBranch: string
+  /** Revision the worktree branch was cut at, exactly as `git rev-parse` printed it. */
+  readonly baseRevision: string
+}
+
+/**
+ * Input to `WorkspaceRegistry.createWorktree`: an existing linked-worktree
+ * directory plus the descriptor to record with it in one create write.
+ */
+export interface WorkspaceWorktreeCreate extends WorkspaceWorktree {
+  /** Existing directory the worktree occupies; canonicalized at create. */
+  readonly path: string
+  /** Display title; defaults to the final path segment when omitted. */
+  readonly title?: string
+}
+
+/**
  * One workspace: a stable id over an existing directory, a display title, and
  * an ordered candidate account of sessions. Membership requires both an id in
  * that account and a session header whose canonical cwd equals the workspace
@@ -47,6 +77,12 @@ export interface Workspace {
 
   /** ISO-8601 instant of the last durable mutation (create counts as one). */
   readonly updatedAt: string
+
+  /**
+   * Worktree descriptor when this workspace is a linked `git worktree`, and
+   * `undefined` for an ordinary directory workspace. Immutable once written.
+   */
+  readonly worktree: WorkspaceWorktree | undefined
 
   /**
    * Header-validated sessions in manually owned order: a new session is

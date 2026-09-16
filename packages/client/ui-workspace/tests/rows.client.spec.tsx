@@ -6,7 +6,10 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
 import type { RowDragProps } from '../src/client/rows/Rows.tsx'
-import { ProjectRowItem, SearchResultItem, SessionNodeItem } from '../src/client/rows/Rows.tsx'
+import { ProjectRowItem, SearchResultItem, SessionNodeItem, WorktreeRowItem } from '../src/client/rows/Rows.tsx'
+import type {
+  WorkspaceProjectActionsOwnerProps, WorkspaceWorktreeRowOwnerProps,
+} from '../src/client/contract/slots.ts'
 import type { GroupNode, SearchResultNode, SessionNode } from '../src/client/tree.ts'
 import { zh } from '../src/client/locales.ts'
 
@@ -138,7 +141,7 @@ describe('workspace browser rows', () => {
     const onCreate = vi.fn()
     const group: GroupNode = {
       key: 'project', workspaceId: wid('project'), cwd: '/projects/project', createdAt: 0, label: 'Project',
-      sessionCount: 1, expanded: true, containsCurrent: true, sessions: [],
+      sessionCount: 1, expanded: true, containsCurrent: true, worktree: undefined, children: [], sessions: [],
     }
     render(<ProjectRowItem group={group} onToggle={onToggle} onCreate={onCreate} t={t} />)
 
@@ -309,7 +312,7 @@ describe('workspace browser rows', () => {
     const onToggle = vi.fn()
     const group: GroupNode = {
       key: 'project', workspaceId: wid('project'), cwd: '/projects/project', createdAt: 0, label: 'Project',
-      sessionCount: 0, expanded: false, containsCurrent: false, sessions: [],
+      sessionCount: 0, expanded: false, containsCurrent: false, worktree: undefined, children: [], sessions: [],
     }
     render(<ProjectRowItem
       group={group} onToggle={onToggle} onCreate={vi.fn()}
@@ -340,7 +343,7 @@ describe('workspace browser rows', () => {
     try {
       const group: GroupNode = {
         key: 'project', workspaceId: wid('project'), cwd: '/projects/project', createdAt: 0, label: 'Project',
-        sessionCount: 0, expanded: false, containsCurrent: false, sessions: [],
+        sessionCount: 0, expanded: false, containsCurrent: false, worktree: undefined, children: [], sessions: [],
       }
       render(<ProjectRowItem group={group} onToggle={vi.fn()} onCreate={vi.fn()} t={t} />)
       fireEvent.pointerEnter(screen.getByRole('treeitem').parentElement as HTMLElement)
@@ -365,7 +368,7 @@ describe('workspace browser rows', () => {
     try {
       const group: GroupNode = {
         key: 'project', workspaceId: wid('project'), cwd: '/home/u/Documents/project', createdAt: 0, label: 'Project',
-        sessionCount: 0, expanded: false, containsCurrent: false, sessions: [],
+        sessionCount: 0, expanded: false, containsCurrent: false, worktree: undefined, children: [], sessions: [],
       }
       render(<ProjectRowItem group={group} home="/home/u" onToggle={vi.fn()} onCreate={vi.fn()} t={t} />)
       fireEvent.pointerEnter(screen.getByRole('treeitem').parentElement as HTMLElement)
@@ -385,7 +388,7 @@ describe('workspace browser rows', () => {
     try {
       const group: GroupNode = {
         key: 'project', workspaceId: wid('project'), cwd: undefined, createdAt: 0, label: 'Project',
-        sessionCount: 0, expanded: false, containsCurrent: false, sessions: [],
+        sessionCount: 0, expanded: false, containsCurrent: false, worktree: undefined, children: [], sessions: [],
       }
       render(<ProjectRowItem group={group} home="/home/u" onToggle={vi.fn()} onCreate={vi.fn()} t={t} />)
       fireEvent.pointerEnter(screen.getByRole('treeitem').parentElement as HTMLElement)
@@ -403,7 +406,7 @@ describe('workspace browser rows', () => {
     try {
       const group: GroupNode = {
         key: 'project', workspaceId: wid('project'), cwd: 'C:\\Users\\u\\project', createdAt: 0, label: 'Project',
-        sessionCount: 0, expanded: false, containsCurrent: false, sessions: [],
+        sessionCount: 0, expanded: false, containsCurrent: false, worktree: undefined, children: [], sessions: [],
       }
       render(<ProjectRowItem group={group} home="C:\\Users\\u" onToggle={vi.fn()} onCreate={vi.fn()} t={t} />)
       fireEvent.pointerEnter(screen.getByRole('treeitem').parentElement as HTMLElement)
@@ -417,7 +420,7 @@ describe('workspace browser rows', () => {
   it('ungrouped bucket renders no workspace menu', () => {
     const group: GroupNode = {
       key: '', workspaceId: undefined, cwd: undefined, createdAt: undefined, label: 'Ungrouped',
-      sessionCount: 0, expanded: false, containsCurrent: false, sessions: [],
+      sessionCount: 0, expanded: false, containsCurrent: false, worktree: undefined, children: [], sessions: [],
     }
     render(<ProjectRowItem group={group} onToggle={vi.fn()} onCreate={vi.fn()} t={t} />)
     expect(screen.queryByRole('button', { name: /工作区/ })).toBeNull()
@@ -622,5 +625,106 @@ describe('workspace browser rows', () => {
         onRename={vi.fn()} onFork={vi.fn()} onArchive={vi.fn()} drag={after} t={t} />,
     )
     expect(screen.getByRole('treeitem').className).toMatch(/dropAfter/)
+  })
+})
+
+function worktreeNode(overrides: Partial<GroupNode> = {}): GroupNode {
+  return {
+    key: 'wt', workspaceId: wid('wt'), cwd: '/worktrees/wt', createdAt: 0, label: 'fix-login',
+    worktree: {
+      parentWorkspaceId: wid('project'),
+      repoPath: '/projects/project',
+      branch: 'dsh/fix-login',
+      baseBranch: 'main',
+      baseRevision: 'a1b2c3d4',
+    },
+    sessionCount: 0, expanded: false, containsCurrent: false, children: [], sessions: [],
+    ...overrides,
+  }
+}
+
+describe('worktree rows', () => {
+  it('renders the branch chip, toggles on click, and hands its owner facts to the occupant', () => {
+    const onToggle = vi.fn()
+    const renderRow = vi.fn((owner: WorkspaceWorktreeRowOwnerProps) => <span>{owner.branch}</span>)
+    render(
+      <WorktreeRowItem
+        group={worktreeNode({ expanded: true, containsCurrent: true })}
+        onToggle={onToggle}
+        renderRow={renderRow}
+        t={t}
+      />,
+    )
+    const row = screen.getByRole('treeitem')
+    expect(row.getAttribute('aria-expanded')).toBe('true')
+    expect(screen.getByText('fix-login')).toBeTruthy()
+    // The static chip and the occupant both show the branch.
+    expect(screen.getAllByText('dsh/fix-login')).toHaveLength(2)
+    fireEvent.click(row)
+    expect(onToggle).toHaveBeenCalledOnce()
+    expect(renderRow).toHaveBeenCalledWith({ workspaceId: wid('wt'), branch: 'dsh/fix-login' })
+  })
+
+  it('renders without an occupant or a Workspace and still shows the checkout name', () => {
+    const { rerender } = render(<WorktreeRowItem group={worktreeNode()} onToggle={vi.fn()} t={t} />)
+    expect(screen.getByRole('treeitem').getAttribute('aria-expanded')).toBe('false')
+
+    const renderRow = vi.fn(() => <span>occupant</span>)
+    rerender(
+      <WorktreeRowItem
+        group={worktreeNode({ workspaceId: undefined, worktree: undefined })}
+        onToggle={vi.fn()}
+        renderRow={renderRow}
+        t={t}
+      />,
+    )
+    expect(renderRow).not.toHaveBeenCalled()
+    expect(screen.queryByText('occupant')).toBeNull()
+  })
+
+  it('renders project-action occupants beside the New-session button with the row facts', () => {
+    const renderActions = vi.fn((owner: WorkspaceProjectActionsOwnerProps) => (
+      <span>{`actions:${owner.title}:${owner.cwd}`}</span>
+    ))
+    const group = worktreeNode({
+      key: 'project', workspaceId: wid('project'), cwd: '/projects/project', label: 'Project', worktree: undefined,
+    })
+    const { rerender } = render(
+      <ProjectRowItem group={group} onToggle={vi.fn()} onCreate={vi.fn()} renderActions={renderActions} t={t} />,
+    )
+    expect(renderActions).toHaveBeenCalledWith({
+      workspaceId: wid('project'),
+      title: 'Project',
+      cwd: '/projects/project',
+    })
+    expect(screen.getByText('actions:Project:/projects/project')).toBeTruthy()
+
+    renderActions.mockClear()
+    rerender(
+      <ProjectRowItem
+        group={{ ...group, cwd: undefined }}
+        onToggle={vi.fn()}
+        onCreate={vi.fn()}
+        renderActions={renderActions}
+        t={t}
+      />,
+    )
+    expect(renderActions).toHaveBeenCalledWith({
+      workspaceId: wid('project'),
+      title: 'Project',
+      cwd: '',
+    })
+
+    renderActions.mockClear()
+    rerender(
+      <ProjectRowItem
+        group={{ ...group, key: '', workspaceId: undefined, cwd: undefined, createdAt: undefined }}
+        onToggle={vi.fn()}
+        onCreate={vi.fn()}
+        renderActions={renderActions}
+        t={t}
+      />,
+    )
+    expect(renderActions).not.toHaveBeenCalled()
   })
 })

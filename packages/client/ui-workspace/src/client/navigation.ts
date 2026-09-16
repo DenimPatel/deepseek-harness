@@ -44,6 +44,12 @@ export interface UiWorkspace {
    */
   startSession(workspaceId?: WorkspaceId): void
   /**
+   * Start a New Session flow inside one existing Workspace, without the
+   * current-or-recent fallback an omitted `startSession` target applies.
+   * @param workspaceId - Workspace the new Session must run in.
+   */
+  startSessionInWorktree(workspaceId: WorkspaceId): void
+  /**
    * Archive a Session and clear it when it is the current selection.
    * @param sessionId - Session to archive.
    */
@@ -174,6 +180,12 @@ class UiWorkspaceService extends Service implements UiWorkspace {
     }
     void this.openWorkspace(target).catch(
       (reason: unknown) => { console.warn('new session failed:', reason) },
+    )
+  }
+
+  startSessionInWorktree(workspaceId: WorkspaceId): void {
+    void this.openWorkspace(workspaceId).catch(
+      (reason: unknown) => { console.warn('worktree session failed:', reason) },
     )
   }
 

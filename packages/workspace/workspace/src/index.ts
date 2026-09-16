@@ -18,10 +18,10 @@ export { WorkspaceMoveInvalidError } from './entity.ts'
 import { defaultWorkspaceTitle, realpathNormalize } from './paths.ts'
 import { workspaceDomainSpec } from './spec.ts'
 import type { WorkspaceDomainState, WorkspaceRecord } from './spec.ts'
-import type { Workspace, WorkspaceId as WorkspaceIdBrand } from './types.ts'
+import type { Workspace, WorkspaceId as WorkspaceIdBrand, WorkspaceWorktree, WorkspaceWorktreeCreate } from './types.ts'
 
-export type { Workspace } from './types.ts'
-export { workspaceDomainState, workspaceRecord, workspaceDomainSpec } from './spec.ts'
+export type { Workspace, WorkspaceWorktree, WorkspaceWorktreeCreate } from './types.ts'
+export { workspaceDomainState, workspaceRecord, workspaceWorktree, workspaceDomainSpec } from './spec.ts'
 export type { WorkspaceDomainState, WorkspaceRecord } from './spec.ts'
 export { realpathNormalize } from './paths.ts'
 
@@ -160,6 +160,39 @@ export class WorkspaceRegistry extends Service {
       throw new Error(`cannot create a workspace at '${canonical}': path is not a directory`)
     }
     return await this.enqueueOperation(() => this.createCanonical(canonical, title))
+  }
+
+  /**
+   * Create or reuse a workspace over an existing directory that is a linked
+   * `git worktree` of another workspace. The descriptor is written in the same
+   * single create write as the rest of the record, so an interrupted create
+   * never leaves a workspace half-described. The parent workspace must be
+   * registered; the directory must already exist and is the caller's
+   * responsibility to create.
+   * @param input - worktree directory, display title, and descriptor.
+   * @returns the newly durable, or already registered, workspace.
+   */
+  createWorktree(input: WorkspaceWorktreeCreate): Promise<Workspace> {
+    return this.enqueueOperation(async () => {
+      const canonical = await realpathNormalize(input.path)
+      if (!(await stat(canonical)).isDirectory()) {
+        throw new Error(`cannot create a workspace at '${canonical}': path is not a directory`)
+      }
+      if (this.entities.get(input.parentWorkspaceId) === undefined) {
+        throw new Error(
+          `cannot create a worktree workspace at '${canonical}': `
+          + `parent workspace '${input.parentWorkspaceId}' is not registered`,
+        )
+      }
+      const worktree: WorkspaceWorktree = {
+        parentWorkspaceId: input.parentWorkspaceId,
+        repoPath: input.repoPath,
+        branch: input.branch,
+        baseBranch: input.baseBranch,
+        baseRevision: input.baseRevision,
+      }
+      return await this.createCanonical(canonical, input.title, worktree)
+    })
   }
 
   /**
@@ -304,9 +337,23 @@ export class WorkspaceRegistry extends Service {
     return undefined
   }
 
-  private async createCanonical(canonical: string, title?: string): Promise<WorkspaceEntity> {
+  private async createCanonical(
+    canonical: string,
+    title?: string,
+    worktree?: WorkspaceWorktree,
+  ): Promise<WorkspaceEntity> {
     for (const entity of this.entities.values()) {
-      if (entity.path === canonical) return entity
+      if (entity.path !== canonical) continue
+      // A worktree create must not adopt an ordinary registration that occupies
+      // the same directory: the descriptor would be dropped silently and the
+      // checkout would render as a plain project with no merge or discard.
+      if (worktree !== undefined && entity.worktree === undefined) {
+        throw new Error(
+          `cannot create a worktree workspace at '${canonical}': `
+          + 'that directory is already registered as an ordinary workspace',
+        )
+      }
+      return entity
     }
 
     const workspaceName = title ?? defaultWorkspaceTitle(canonical)
@@ -320,6 +367,7 @@ export class WorkspaceRegistry extends Service {
       sessionIds: [],
       createdAt: now,
       updatedAt: now,
+      ...worktree === undefined ? {} : { worktree },
     }
     const entity = new WorkspaceEntity(this.host, id, record)
     this.entities.set(id, entity)

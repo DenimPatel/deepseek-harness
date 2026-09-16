@@ -433,6 +433,24 @@ describe('UiWorkspaceService', () => {
     })
   })
 
+  it('opens an explicit worktree Workspace and reports a failed worktree start', async () => {
+    const b = bench({
+      sessions: sessionState(),
+      workspaces: workspaceState([workspace('wt')]),
+    })
+    b.uiWorkspace.startSessionInWorktree(wid('wt'))
+    await vi.waitFor(() => {
+      expect(b.sessions.open).toHaveBeenCalledWith(sid('created-wt'))
+    })
+
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    b.sessions.create.mockRejectedValueOnce(new Error('create failed'))
+    b.uiWorkspace.startSessionInWorktree(wid('wt'))
+    await vi.waitFor(() => {
+      expect(warning).toHaveBeenCalledWith('worktree session failed:', expect.any(Error))
+    })
+  })
+
   it('opens the recent Workspace after both baselines arrive', async () => {
     const b = bench()
     b.sessions.create.mockResolvedValue(sid('initial'))

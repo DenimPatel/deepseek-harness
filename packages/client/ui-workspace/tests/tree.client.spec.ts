@@ -26,6 +26,22 @@ const workspace = (id: string, sessionIds: string[], title = id): WorkspaceView 
   workspaceId: wid(id), path: `/projects/${id}`, title,
   sessionIds: sessionIds.map(sid), createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
 })
+const worktreeWorkspace = (
+  id: string,
+  sessionIds: string[],
+  parentId: string,
+  branch = id,
+): WorkspaceView => ({
+  ...workspace(id, sessionIds),
+  path: `/worktrees/${id}`,
+  worktree: {
+    parentWorkspaceId: wid(parentId),
+    repoPath: `/projects/${parentId}`,
+    branch,
+    baseBranch: 'main',
+    baseRevision: 'a1b2c3d4',
+  },
+})
 const view = (expandedGroups: readonly string[] = [], ungroupedOrder?: readonly string[]) => ({
   expandedGroups,
   ...(ungroupedOrder === undefined ? {} : { ungroupedOrder }),
@@ -320,6 +336,89 @@ describe('deriveGroups', () => {
       { ...list(owned, loose), current: loose.id }, [ws], noArchive, noAttention, view(),
     )
     expect(looseGroups.find(group => group.key === UNGROUPED_KEY)!.containsCurrent).toBe(true)
+  })
+})
+
+describe('worktree grouping', () => {
+  it('nests worktree groups under their parent and counts their sessions', () => {
+    const parent = workspace('project', ['owned'], 'Project')
+    const first = worktreeWorkspace('wt-one', ['in-one'], 'project', 'dsh/one')
+    const second = worktreeWorkspace('wt-two', [], 'project', 'dsh/two')
+    const groups = deriveGroups(
+      list(summary('owned', 1), summary('in-one', 2)),
+      [parent, first, second],
+      noArchive,
+      noAttention,
+      view(['project', 'wt-one']),
+    )
+    expect(groups.map(group => group.key)).toEqual(['project'])
+    expect(groups[0]!.children.map(child => child.key)).toEqual(['wt-one', 'wt-two'])
+    expect(groups[0]!.sessionCount).toBe(2)
+    expect(groups[0]!.children[0]!.sessions.map(session => session.id)).toEqual([sid('in-one')])
+    expect(groups[0]!.children[1]!.sessions).toEqual([])
+  })
+
+  it('hides a folded parent’s worktree rows but keeps their count', () => {
+    const parent = workspace('project', ['owned'])
+    const child = worktreeWorkspace('wt', ['in-tree'], 'project')
+    const groups = deriveGroups(
+      list(summary('owned', 1), summary('in-tree', 2)),
+      [parent, child],
+      noArchive,
+      noAttention,
+      view(),
+    )
+    expect(groups[0]!.children).toEqual([])
+    expect(groups[0]!.sessionCount).toBe(2)
+  })
+
+  it('keeps a worktree at top level when its parent is not listed', () => {
+    const orphan = worktreeWorkspace('orphan', ['in-orphan'], 'absent', 'dsh/orphan')
+    const groups = deriveGroups(
+      list(summary('in-orphan', 1)), [orphan], noArchive, noAttention, view(['orphan']),
+    )
+    expect(groups.map(group => group.key)).toEqual(['orphan'])
+    expect(groups[0]!.children).toEqual([])
+    expect(groups[0]!.sessions.map(session => session.id)).toEqual([sid('in-orphan')])
+  })
+
+  it('keeps a worktree that names itself as parent at top level', () => {
+    const self = worktreeWorkspace('self', [], 'self')
+    const groups = deriveGroups(list(), [self], noArchive, noAttention, view())
+    expect(groups.map(group => group.key)).toEqual(['self'])
+    expect(groups[0]!.children).toEqual([])
+  })
+
+  it('marks the parent selected when a nested worktree holds the current session', () => {
+    const parent = workspace('project', [])
+    const child = worktreeWorkspace('wt', ['inside'], 'project')
+    const groups = deriveGroups(
+      { ...list(summary('inside', 1)), current: sid('inside') },
+      [parent, child],
+      noArchive,
+      noAttention,
+      view(['project']),
+    )
+    expect(groups[0]!.containsCurrent).toBe(true)
+    expect(groups[0]!.children[0]!.containsCurrent).toBe(true)
+  })
+
+  it('labels a worktree session with its parent title and branch in search', () => {
+    const parent = workspace('project', [], 'Alpha')
+    const child = worktreeWorkspace('wt', ['inside'], 'project', 'dsh/fix-login')
+    const inside = summary('inside', 1)
+    inside.displayTitle = 'Find me'
+    const sessions = list(inside)
+
+    const labelled = deriveSearchResults(
+      sessions, [parent, child], 'fix-login', noArchive, noAttention, { items: [], hasMore: false }, 10,
+    )
+    expect(labelled.items.map(item => item.workspace)).toEqual(['Alpha · dsh/fix-login'])
+
+    const parentless = deriveSearchResults(
+      sessions, [child], 'Find me', noArchive, noAttention, { items: [], hasMore: false }, 10,
+    )
+    expect(parentless.items.map(item => item.workspace)).toEqual(['wt · dsh/fix-login'])
   })
 })
 

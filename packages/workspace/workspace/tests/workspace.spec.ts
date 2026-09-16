@@ -603,6 +603,129 @@ describe('WorkspaceRegistry create and lookup', () => {
   })
 })
 
+describe('workspace worktree records', () => {
+  function worktreeInput(path: string, parentWorkspaceId: WorkspaceId) {
+    return {
+      path,
+      title: 'feature',
+      parentWorkspaceId,
+      repoPath: '/repo',
+      branch: 'dsh/feature',
+      baseBranch: 'main',
+      baseRevision: 'a1b2c3d4',
+    }
+  }
+
+  it('records the descriptor in the create write and keeps it across a restart', async () => {
+    const repo = await makeDir('worktree-repo')
+    const tree = await makeDir('worktree-tree')
+    const pool = new MemoryMediaPool()
+    const result = await harness({ pool })
+    const parent = await result.registry.create(repo)
+    const child = await result.registry.createWorktree(worktreeInput(tree, parent.id))
+
+    const descriptor = {
+      parentWorkspaceId: parent.id,
+      repoPath: '/repo',
+      branch: 'dsh/feature',
+      baseBranch: 'main',
+      baseRevision: 'a1b2c3d4',
+    }
+    expect(child.worktree).toEqual(descriptor)
+    expect(child.title).toBe('feature')
+    // One create write means the descriptor is already on the medium, never a
+    // second patch of a record that briefly existed without it.
+    expect(storedRecord(pool, child.id).worktree).toEqual(descriptor)
+    expect(result.registry.list().map(workspace => workspace.id)).toEqual([child.id, parent.id])
+
+    await result.fiber.dispose()
+    const restarted = await harness({ pool })
+    expect(restarted.registry.get(child.id)!.worktree).toEqual(descriptor)
+    expect(restarted.registry.get(parent.id)!.worktree).toBeUndefined()
+    await restarted.fiber.dispose()
+  })
+
+  it('leaves an ordinary Workspace without a descriptor and reads pre-field media unchanged', async () => {
+    const dir = await makeDir('worktree-plain')
+    const legacyId = WorkspaceId('00000000-0000-4000-8000-00000000000b')
+    const legacy = storedPool(
+      [[legacyId, record(dir, [])]],
+      { initialized: true, workspaceIds: [legacyId] },
+    )
+    const result = await harness({ pool: legacy })
+    expect(result.registry.get(legacyId)!.worktree).toBeUndefined()
+    expect((await result.registry.create(await makeDir('worktree-plain-2'))).worktree).toBeUndefined()
+  })
+
+  it('rejects an unregistered parent or a non-directory path without writing', async () => {
+    const tree = await makeDir('worktree-orphan')
+    const result = await harness()
+    await expect(result.registry.createWorktree(
+      worktreeInput(tree, WorkspaceId('00000000-0000-4000-8000-00000000000c')),
+    )).rejects.toThrow(/parent workspace .* is not registered/)
+    expect(result.registry.list()).toEqual([])
+
+    const parent = await result.registry.create(await makeDir('worktree-parent'))
+    const plain = join(base, 'worktree-plain-file')
+    await writeFile(plain, 'not a directory')
+    await expect(result.registry.createWorktree(
+      worktreeInput(plain, parent.id),
+    )).rejects.toThrow(/path is not a directory/)
+    expect(result.registry.list()).toEqual([parent])
+  })
+
+  it('rolls the record back when the registry-order write fails', async () => {
+    const repo = await makeDir('worktree-rollback-repo')
+    const tree = await makeDir('worktree-rollback-tree')
+    const pool = new MemoryMediaPool()
+    // Global writes: bootstrap marker, then pending/order for the parent create,
+    // then pending/order for the worktree create — the last one is the failure.
+    const result = await harness({ pool, backend: selectiveFailureBackend(pool, { globalAt: 5 }) })
+    const parent = await result.registry.create(repo)
+    await expect(result.registry.createWorktree(worktreeInput(tree, parent.id)))
+      .rejects.toThrow(/selected bootstrap marker failure/)
+    expect(result.registry.list().map(workspace => workspace.id)).toEqual([parent.id])
+    expect(pool.media.get('workspace')!.tables.get('workspaces')!.size).toBe(1)
+  })
+
+  it('publishes no worktree Workspace when its record write fails', async () => {
+    const repo = await makeDir('worktree-record-repo')
+    const tree = await makeDir('worktree-record-tree')
+    const pool = new MemoryMediaPool()
+    // Puts: the parent's record, then the worktree's record.
+    const result = await harness({ pool, backend: selectiveFailureBackend(pool, { putAt: 2 }) })
+    const parent = await result.registry.create(repo)
+    await expect(result.registry.createWorktree(worktreeInput(tree, parent.id)))
+      .rejects.toThrow(/selected bootstrap put failure/)
+    expect(result.registry.list().map(workspace => workspace.id)).toEqual([parent.id])
+    expect(pool.media.get('workspace')!.tables.get('workspaces')!.size).toBe(1)
+  })
+
+  it('refuses to adopt a directory already registered as an ordinary Workspace', async () => {
+    const tree = await makeDir('worktree-adopt')
+    const result = await harness()
+    const parent = await result.registry.create(await makeDir('worktree-adopt-parent'))
+    const plain = await result.registry.create(tree)
+
+    await expect(result.registry.createWorktree(worktreeInput(tree, parent.id)))
+      .rejects.toThrow(/already registered as an ordinary workspace/)
+    expect(result.registry.get(plain.id)!.worktree).toBeUndefined()
+    expect(result.registry.list().map(workspace => workspace.id)).toEqual([plain.id, parent.id])
+  })
+
+  it('returns the same record when the directory is already that worktree', async () => {
+    const tree = await makeDir('worktree-idempotent')
+    const result = await harness()
+    const parent = await result.registry.create(await makeDir('worktree-idempotent-parent'))
+    const first = await result.registry.createWorktree(worktreeInput(tree, parent.id))
+
+    const second = await result.registry.createWorktree(worktreeInput(tree, parent.id))
+    expect(second.id).toBe(first.id)
+    expect(second.worktree).toEqual(first.worktree)
+    expect(result.registry.list()).toHaveLength(2)
+  })
+})
+
 describe('Workspace registry ordering', () => {
   it('moves a workspace before an anchor or to the end and restores that order after restart', async () => {
     const firstDir = await makeDir('order-first')

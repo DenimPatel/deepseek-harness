@@ -100,6 +100,31 @@
   height: 20px;
 }
 
+/* Nested worktree row: indented under its parent project, with a branch chip
+   where a project row shows its create action. */
+.worktreeRow {
+  padding-left: 24px;
+}
+
+.worktreeRowCurrent .title {
+  color: var(--dsw-alias-state-business-primary);
+}
+
+.branchChip {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  padding: 0 6px;
+  border-radius: 4px;
+  border: 0.5px solid var(--dsw-alias-border-l4);
+  background: var(--dsw-alias-button-elevated-fill);
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  line-height: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* Session cell (figma): pad 8, a 16px status slot, then a 4px title gap. */
 .sessionRow {
   height: 32px;
