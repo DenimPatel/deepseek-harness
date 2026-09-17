@@ -72,6 +72,12 @@
     - id: workspace
       name: '@deepseek-ai/dsh-workspace'
 
+    # Parallel edits: linked git worktree checkouts, one per Session that asks
+    # for isolation. Mounted with no configuration, so nothing is copied and no
+    # setup command runs until a deployment sets one.
+    - id: workspace-worktree
+      name: '@deepseek-ai/dsh-workspace-worktree'
+
     - id: session-reference
       name: '@deepseek-ai/dsh-session-reference'
 
@@ -117,6 +123,11 @@
     # Workspace commands and reconnect-safe projection over Typert Remote.
     - id: workspace-controller
       name: '@deepseek-ai/dsh-api-workspace-controller'
+
+    # Git worktree commands over Typert Remote. The row stays pending, and
+    # registers no namespace, when the composition mounts no worktree service.
+    - id: git-worktree-controller
+      name: '@deepseek-ai/dsh-api-git-worktree-controller'
 
     - id: cordis-host-runner
       name: '@deepseek-ai/dsh-cordis-host-runner'
@@ -292,6 +303,11 @@
 
     - id: ui-workspace
       name: '@deepseek-ai/dsh-client-ui-workspace'
+
+    # Parallel edits: worktree rows, the New-session menu entry, and the
+    # Session-header Merge/Discard control.
+    - id: ui-workspace-worktree
+      name: '@deepseek-ai/dsh-client-ui-workspace-worktree'
 
     # Input triggers: the '/' | '@' pipeline (ui-input-trigger), the command surface over
     # it (ui-commands), and the reference sources (ui-skill / ui-reference).

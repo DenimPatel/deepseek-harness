@@ -5,7 +5,7 @@
  * except workspace Rename/Delete and session Rename/Fork/Archive; the session
  * and workspace hover cards are suppressed while a menu is open.
  */
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import clsx from 'clsx'
 import {
   HoverCard, IconAlarmClockOutline16, IconArchiveOutline20, IconBranchOutline16,
@@ -15,7 +15,7 @@ import {
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { StateDotState } from '@deepseek-ai/dsh-client-ui-primitives'
 import { abbreviateHomePath } from '@deepseek-ai/dsh-util-workspace-path'
-import type { WorkspaceBrowserProps } from '../contract/slots.ts'
+import type { WorkspaceBrowserProps, WorkspaceProjectActionsOwnerProps, WorkspaceWorktreeRowOwnerProps } from '../contract/slots.ts'
 import type { GroupNode, SearchResultNode, SessionNode } from '../tree.ts'
 import css from './Rows.module.css'
 
@@ -101,20 +101,27 @@ function rowHalf(e: { clientY: number; currentTarget: HTMLElement }): 'before' |
  * hover reveals the chevron and create button, and dwelling on a real
  * Workspace shows its hover card (the ungrouped bucket has none).
  * `containsCurrent` arrives on the node (derivation fact, no renderer scan).
+ * The `+` button keeps the plain New-session action; the
+ * `sidebar.workspaces.projectActions` occupants render their own triggers
+ * beside it.
  * @param props.group - derived group node.
  * @param props.onToggle - expand/collapse the group.
  * @param props.onCreate - start a frontend Session inside this Workspace.
+ * @param props.actions - real-Workspace rename/delete actions; absent for the ungrouped bucket.
+ * @param props.renderActions - occupant triggers for the project-actions slot.
  * @param props.drag - optional workspace-row drag wiring.
  * @param props.home - host account home for POSIX hover-path abbreviation.
  * @param props.t - the browser root's locale seat.
  * @returns the row element.
  */
-export function ProjectRowItem({ group, onToggle, onCreate, actions, drag, home, t }: {
+export function ProjectRowItem({ group, onToggle, onCreate, actions, renderActions, drag, home, t }: {
   group: GroupNode
   onToggle: () => void
   onCreate: () => void
   /** Real-Workspace actions; absent for the ungrouped bucket (no menu shown). */
   actions?: { rename: () => void; delete: () => void } | undefined
+  /** Occupant triggers rendered beside the New-session button; absent leaves the plain action alone. */
+  renderActions?: ((owner: WorkspaceProjectActionsOwnerProps) => ReactNode) | undefined
   /** Present only for real Workspace rows in the grouped view. */
   drag?: WorkspaceRowDragProps | undefined
   /** Host account home; POSIX home-rooted hover paths display as `~`. */
@@ -192,6 +199,11 @@ export function ProjectRowItem({ group, onToggle, onCreate, actions, drag, home,
         >
           <IconPlusOutline16 />
         </button>
+        {renderActions !== undefined && row.workspaceId !== undefined && renderActions({
+          workspaceId: row.workspaceId,
+          title: label,
+          cwd: row.cwd ?? '',
+        })}
       </span>
     </div>
   )
@@ -214,11 +226,51 @@ export function ProjectRowItem({ group, onToggle, onCreate, actions, drag, home,
   )
 }
 
+/**
+ * One worktree row nested under its parent project: the group expander, the
+ * checkout name, the branch chip, and whatever the
+ * `sidebar.workspaces.worktreeRow` occupant renders for its status and actions.
+ * @param props.group - derived worktree group node.
+ * @param props.onToggle - expand/collapse the worktree group.
+ * @param props.renderRow - occupant decoration for this row.
+ * @param props.t - the browser root's locale seat.
+ * @returns the row element.
+ */
+export function WorktreeRowItem({ group, onToggle, renderRow, t }: {
+  group: GroupNode
+  onToggle: () => void
+  /** Occupant decoration; absent leaves the checkout name and branch chip alone. */
+  renderRow?: ((owner: WorkspaceWorktreeRowOwnerProps) => ReactNode) | undefined
+  t: RowTranslate
+}) {
+  const branch = group.worktree?.branch ?? ''
+  return (
+    <div
+      className={clsx(css.projectRow, css.worktreeRow, group.containsCurrent && css.worktreeRowCurrent)}
+      role="treeitem"
+      aria-expanded={group.expanded}
+      aria-label={t('worktree.row.aria', { name: group.label, branch })}
+      onClick={onToggle}
+    >
+      <span className={clsx(css.slot, css.chevron)}>
+        <IconTriangleRightFill14 className={clsx(css.arrow, group.expanded && css.arrowOpen)} />
+      </span>
+      <span className={css.projectText}>
+        <span className={css.title}>{group.label}</span>
+      </span>
+      <span className={css.branchChip}>{branch}</span>
+      <span className={css.rowActions}>
+        {renderRow !== undefined && group.workspaceId !== undefined
+          && renderRow({ workspaceId: group.workspaceId, branch })}
+      </span>
+    </div>
+  )
+}
+
 /* v8 ignore next 3 -- closed-union backstop; only reached if the status is forged */
 function assertNever(value: never): never {
   throw new Error(`unknown pending interaction: ${String(value)}`)
 }
-
 interface SessionStatus {
   state: StateDotState
   label: string

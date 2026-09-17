@@ -77,6 +77,9 @@
       "@deepseek-ai/dsh-api-workspace-controller": ["./packages/api/workspace-controller/src/index.ts"],
       "@deepseek-ai/dsh-api-workspace-controller/client": ["./packages/api/workspace-controller/src/client/index.ts"],
       "@deepseek-ai/dsh-api-workspace-controller/types": ["./packages/api/workspace-controller/src/types.ts"],
+      "@deepseek-ai/dsh-api-git-worktree-controller": ["./packages/api/git-worktree-controller/src/index.ts"],
+      "@deepseek-ai/dsh-api-git-worktree-controller/client": ["./packages/api/git-worktree-controller/src/client/index.ts"],
+      "@deepseek-ai/dsh-api-git-worktree-controller/types": ["./packages/api/git-worktree-controller/src/types.ts"],
       "@deepseek-ai/dsh-typert-protocol": ["./packages/typert/protocol/src/index.ts"],
       "@deepseek-ai/dsh-typert-protocol/types": ["./packages/typert/protocol/src/types.ts"],
       "@deepseek-ai/dsh-typert-loader": ["./packages/typert/loader/src/index.ts"],
@@ -240,6 +243,7 @@
       "@deepseek-ai/dsh-client-ui-user-questions": ["./packages/client/ui-user-questions/src"],
       "@deepseek-ai/dsh-client-ui-trajectory": ["./packages/client/ui-trajectory/src"],
       "@deepseek-ai/dsh-client-ui-workspace": ["./packages/client/ui-workspace/src"],
+      "@deepseek-ai/dsh-client-ui-workspace-worktree": ["./packages/client/ui-workspace-worktree/src"],
       "@deepseek-ai/dsh-client-ui-theme": ["./packages/client/ui-theme/src"],
       "@deepseek-ai/dsh-client-ui-settings": ["./packages/client/ui-settings/src"],
       "@deepseek-ai/dsh-client-ui-settings-general": ["./packages/client/ui-settings-general/src"],
@@ -487,7 +491,8 @@
       "@deepseek-ai/dsh-workflow/invariant": ["./packages/workflow/workflow/src/invariant.ts"],
       "@deepseek-ai/dsh-workflow-ptc": ["./packages/workflow/workflow-ptc/src"],
       "@deepseek-ai/dsh-workspace": ["./packages/workspace/workspace/src"],
-      "@deepseek-ai/dsh-workspace/invariant": ["./packages/workspace/workspace/src/invariant.ts"]
+      "@deepseek-ai/dsh-workspace/invariant": ["./packages/workspace/workspace/src/invariant.ts"],
+      "@deepseek-ai/dsh-workspace-worktree": ["./packages/workspace/workspace-worktree/src"]
       // END generated package aliases
     }
   }

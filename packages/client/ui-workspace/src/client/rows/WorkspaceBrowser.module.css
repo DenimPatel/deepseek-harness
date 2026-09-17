@@ -377,6 +377,16 @@
   margin-top: 4px;
 }
 
+/* One nested worktree of a project: its own row plus the sessions that ran in
+   the checkout. The 2px row rhythm matches the surrounding session run. */
+.worktreeSection {
+  position: relative;
+}
+
+.worktreeSection > * + * {
+  margin-top: 2px;
+}
+
 .listTopDropIndicator,
 .workspaceDropBefore::before,
 .workspaceDropAfter::after {

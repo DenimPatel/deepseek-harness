@@ -51,12 +51,43 @@ export interface DirectoryFlowOwnerProps {
   onError: (message: string) => void
 }
 
+/**
+ * Owner share of one Project row's extra actions. The owner renders the row and
+ * keeps its New-session button as the default action; an occupant adds its own
+ * trigger beside that button and owns whatever surface the trigger opens.
+ */
+export interface WorkspaceProjectActionsOwnerProps {
+  /** Workspace the row belongs to. */
+  workspaceId: WorkspaceId
+  /** Workspace display title, already localized for the ungrouped bucket. */
+  title: string
+  /** Canonical directory path. */
+  cwd: string
+}
+
+/**
+ * Owner share of one worktree row. The owner supplies identity and the branch
+ * fact it already has from the derivation; the occupant owns every other read
+ * and action, because only it knows the checkout's current status and whether a
+ * merge or discard is safe.
+ */
+export interface WorkspaceWorktreeRowOwnerProps {
+  /** Worktree Workspace this row decorates. */
+  workspaceId: WorkspaceId
+  /** Branch checked out in the worktree. */
+  branch: string
+}
+
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface SlotMap {
     /** Directory-flow hole under the conversation empty-state picker (declared by the WorkspacePicker entry). */
     'conversation.hero.workspace.directoryFlow': { kind: 'single'; scope: 'root'; owner: DirectoryFlowOwnerProps }
     /** Directory-flow hole under the sidebar browsing region (declared by the WorkspaceBrowser entry). */
     'sidebar.workspaces.directoryFlow': { kind: 'single'; scope: 'root'; owner: DirectoryFlowOwnerProps }
+    /** Extra entries appended to one Project row's action area (list kind). */
+    'sidebar.workspaces.projectActions': { kind: 'list'; scope: 'root'; owner: WorkspaceProjectActionsOwnerProps }
+    /** Decoration for one worktree row: branch chip, counts, and its actions. */
+    'sidebar.workspaces.worktreeRow': { kind: 'single'; scope: 'root'; owner: WorkspaceWorktreeRowOwnerProps }
   }
 }
 
@@ -103,6 +134,11 @@ export type WorkspaceBrowserInjected = {
    * Workspace, then the recent Workspace, or clear into the New Session view.
    */
   startSession: (workspaceId?: WorkspaceId) => void
+  /**
+   * Open the Session a worktree Workspace already backs, creating its blank
+   * Session when the worktree has none.
+   */
+  startSessionInWorktree: (workspaceId: WorkspaceId) => void
   /** Open a real Session. */
   open: (sessionId: SessionId) => void
   /**
@@ -141,7 +177,11 @@ export type WorkspaceBrowserInjected = {
 /** Full browser props: shell owner share + viewing store + injected actions + the locale seat. */
 export type WorkspaceBrowserProps =
   PropsRuntime<'sidebar.workspaces'>
-  & PropsRenderSlots<'sidebar.workspaces.directoryFlow'>
+  & PropsRenderSlots<
+    | 'sidebar.workspaces.directoryFlow'
+    | 'sidebar.workspaces.projectActions'
+    | 'sidebar.workspaces.worktreeRow'
+  >
   & PropsStore<ReturnType<typeof createWorkspaceViewStore>>
   & Omit<WorkspaceBrowserInjected, 'hooks'>
   & PropsHooks<WorkspaceBrowserInjected['hooks']>

@@ -50,6 +50,12 @@ interface Workspace {
   readonly updatedAt: string
 
   /**
+   * Worktree descriptor when this workspace is a linked `git worktree`, and
+   * `undefined` for an ordinary directory workspace. Immutable once written.
+   */
+  readonly worktree: WorkspaceWorktree | undefined
+
+  /**
    * Header-validated sessions in manually owned order: a new session is
    * prepended at attach, explicit reordering goes through
    * `insertSessionBefore`, and activity never reorders. The durable candidate
@@ -115,9 +121,45 @@ interface Workspace {
 
 Ownership truth is the record's ordered `sessionIds`, never derived from session cwd — but membership requires both: an id on the account and a header whose canonical cwd equals the workspace path, so one session structurally belongs to at most one workspace. Failed writes reject (`insertSessionBefore` account errors as `WorkspaceMoveInvalidError`, storage failures as plain errors); every accepted mutation stamps `updatedAt` and durably prunes candidates that no longer pass the membership check.
 
+A workspace that is a linked `git worktree` carries that origin in `worktree`, and it stays an ordinary workspace in every other respect: membership, persistence, and grouping treat it by its path alone.
+
+```ts type-equiv
+/**
+ * Durable description of one workspace that is a linked `git worktree` of
+ * another workspace. The record stays an ordinary workspace in every other
+ * respect, so membership, persistence, and grouping treat it by its
+ * {@link Workspace.path} alone.
+ */
+interface WorkspaceWorktree {
+  /** Workspace owning the repository this worktree was cut from. */
+  readonly parentWorkspaceId: WorkspaceId
+  /** Canonical directory of the parent repository's main worktree. */
+  readonly repoPath: string
+  /** Branch checked out in this worktree. */
+  readonly branch: string
+  /** Branch the worktree branch was cut from. */
+  readonly baseBranch: string
+  /** Revision the worktree branch was cut at, exactly as `git rev-parse` printed it. */
+  readonly baseRevision: string
+}
+```
+
+```ts type-equiv
+/**
+ * Input to `WorkspaceRegistry.createWorktree`: an existing linked-worktree
+ * directory plus the descriptor to record with it in one create write.
+ */
+interface WorkspaceWorktreeCreate extends WorkspaceWorktree {
+  /** Existing directory the worktree occupies; canonicalized at create. */
+  readonly path: string
+  /** Display title; defaults to the final path segment when omitted. */
+  readonly title?: string
+}
+```
+
 ## The registry: `ctx.workspaceRegistry`
 
-`WorkspaceRegistry` ([signatures](#ctxworkspaceregistry--workspaceregistry)) owns registration and resolution. `create(path, title?)` requires a fully qualified path, canonicalizes it, rejects a nonexistent path (the original `ENOENT`) or a non-directory, returns the existing entity unchanged when the canonical path is already owned, and otherwise creates a record with `title ?? defaultWorkspaceTitle(path)` prepended to the durable registry order (different canonical paths may share a display title, and a path with no final segment uses its root spelling). `get(id)` and the ordered `list()` are synchronous cache reads; `resolveByPath(path)` applies the same fully qualified realpath canon without creating. `delete(id)` removes only the registration, order entry, and session account — the directory, user files, live sessions, and persisted logs are never touched, so those sessions become Ungrouped ([decision](../../.agents/notes/implemented/feature/2026-07-27-workspace-registration-deletion.md)); unknown ids return `false`. Create and delete persist a pending-mutation marker before their two writes (record + order) can diverge; startup resolves exactly the marked mutation — by deleting the marked table row, which completes an interrupted delete and rolls back an interrupted create (the registration is re-creatable, so rollback is the safe direction) — and an unmarked order/table mismatch fails loud as corruption.
+`WorkspaceRegistry` ([signatures](#ctxworkspaceregistry--workspaceregistry)) owns registration and resolution. `create(path, title?)` requires a fully qualified path, canonicalizes it, rejects a nonexistent path (the original `ENOENT`) or a non-directory, returns the existing entity unchanged when the canonical path is already owned, and otherwise creates a record with `title ?? defaultWorkspaceTitle(path)` prepended to the durable registry order (different canonical paths may share a display title, and a path with no final segment uses its root spelling). `get(id)` and the ordered `list()` are synchronous cache reads; `resolveByPath(path)` applies the same fully qualified realpath canon without creating. `delete(id)` removes only the registration, order entry, and session account — the directory, user files, live sessions, and persisted logs are never touched, so those sessions become Ungrouped ([decision](../../.agents/notes/implemented/feature/2026-07-27-workspace-registration-deletion.md)); unknown ids return `false`. Create and delete persist a pending-mutation marker before their two writes (record + order) can diverge; startup resolves exactly the marked mutation — by deleting the marked table row, which completes an interrupted delete and rolls back an interrupted create (the registration is re-creatable, so rollback is the safe direction) — and an unmarked order/table mismatch fails loud as corruption. `createWorktree(input)` uses the same create path for a linked-worktree directory and records the descriptor in the create write itself, so a failure never leaves a checkout registered without its origin; it refuses a directory already registered as an ordinary workspace, because the descriptor would then be dropped silently.
 
 Sessions get their cwd at create time from whoever creates them, not from this registry — the API gateway resolves a new session's cwd from the chosen workspace's `path` (falling back to an explicit or default cwd), creates the session so the cwd lands in its immutable [`SessionHeader`](persistence.md#sessionheader--metadata-beside-the-log), then calls `attachSession`, which re-validates that stored header cwd against the workspace path. On the first successful start, the registry bootstraps history from persisted headers alone (`id`, `cwd`, `createdAt` — never event bodies), grouping sessions with a valid canonical cwd into per-directory workspaces, newest first; the initialized marker is written last so an interrupted bootstrap resumes safely. The bootstrap is one-time: cwd-less legacy sessions stay Ungrouped, and sessions created afterwards join a workspace only through `attachSession`.
 
@@ -182,6 +224,119 @@ Host service backing the generated `ctx.remote.directoryPicker` namespace. The s
 ```
 
 Source: [`packages/api/workspace-controller/src/directory-picker.ts`](../../packages/api/workspace-controller/src/directory-picker.ts)
+
+<a id="ctxgitworktree--gitworktree"></a>
+
+### `ctx.gitWorktree` — `GitWorktree`
+
+Linked-worktree operations over one repository. The service holds no cache: every call observes the repository as it is now, because a worktree can be removed or checked out by anything else on the machine.
+
+```ts cordis-catalog
+/**
+ * Observe one directory without mutating anything. Never throws for a
+ * missing git or a non-repository path: those are reported facts.
+ * @param path - Absolute directory to observe.
+ * @returns what the directory currently is.
+ */
+async probe(path: string): Promise<GitWorktreeProbe>
+
+/**
+ * Create one linked worktree under the configured root, on a new branch cut
+ * from `baseRef`, then run the configured copy and setup steps.
+ * @param request - parent repository, worktree name, and base revision.
+ * @returns the created directory, branch, and base revision.
+ * @throws GitWorktreeError with `git-unavailable`, `not-a-repository`,
+ * `unsupported-parent`, `invalid-name`, `path-exists`, `branch-exists`,
+ * `create-failed`, or `setup-failed`.
+ */
+async create(request: GitWorktreeCreateRequest): Promise<GitWorktreeCreateValue>
+
+/**
+ * List every worktree of one repository.
+ * @param repoPath - Any directory inside the parent repository.
+ * @returns one entry per registered worktree, in git's own order.
+ * @throws GitWorktreeError when the path is not a repository.
+ */
+async list(repoPath: string): Promise<GitWorktreeEntry[]>
+
+/**
+ * Observe one linked worktree relative to a base revision.
+ * @param request - worktree directory and the revision to compare against.
+ * @returns working-tree changes plus ahead/behind counts.
+ * @throws GitWorktreeError with `not-found` when the directory is gone.
+ */
+async status(request: GitWorktreeStatusRequest): Promise<GitWorktreeStatus>
+
+/**
+ * Merge one worktree branch into the parent repository's target ref. Refuses
+ * while the parent tree is dirty or mid-operation, and aborts on conflict so
+ * the parent is never left half-merged.
+ * @param request - parent repository, branch, and optional target ref.
+ * @returns whether the merge landed, or the conflicting paths.
+ * @throws GitWorktreeError with `parent-dirty`, `parent-busy`, or `merge-failed`.
+ */
+async merge(request: GitWorktreeMergeRequest): Promise<GitWorktreeMergeResult>
+
+/**
+ * Remove one linked worktree and its branch. The directory is removed first
+ * and the branch second, so a failure never leaves a branch whose checkout
+ * still exists.
+ * @param request - parent repository, worktree directory, branch, and force.
+ * @returns removal receipt.
+ * @throws GitWorktreeError with `remove-failed`.
+ */
+async remove(request: GitWorktreeRemoveRequest): Promise<GitWorktreeRemoveValue>
+```
+
+Source: [`packages/workspace/workspace-worktree/src/index.ts`](../../packages/workspace/workspace-worktree/src/index.ts)
+
+<a id="ctxgitworktreecontroller--gitworktreecontroller"></a>
+
+### `ctx.gitWorktreeController` — `GitWorktreeController`
+
+Host service backing the generated `ctx.remote.gitWorktree` namespace.
+
+```ts cordis-catalog
+/**
+ * Observe one directory without mutating anything.
+ * @param request - absolute directory to observe.
+ * @returns whether git is usable, whether the directory is a repository, and its state.
+ */
+@Remote('probe') async probe(request: GitWorktreeProbeRequest): Promise<GitWorktreeProbeValue>
+
+/**
+ * Create one linked worktree from a registered Workspace and register the
+ * checkout as a Workspace of its own.
+ * @param request - parent Workspace, worktree name, and optional base ref.
+ * @returns the new Worktree Workspace plus its checkout facts.
+ */
+@Remote('create') async create(request: GitWorktreeCreateRequest): Promise<GitWorktreeCreateValue>
+
+/**
+ * Read the working-tree state of one worktree Workspace.
+ * @param request - the worktree Workspace.
+ * @returns changes, ahead/behind counts, and conflicts, or a `missing` report.
+ */
+@Remote('status') async status(request: GitWorktreeStatusRequest): Promise<GitWorktreeStatusValue>
+
+/**
+ * Merge one worktree branch into its parent repository.
+ * @param request - the worktree Workspace.
+ * @returns whether the merge landed, and the conflicting paths when it did not.
+ */
+@Remote('merge') merge(request: GitWorktreeMergeRequest): Promise<GitWorktreeMergeValue>
+
+/**
+ * Remove one worktree checkout, its branch, and its Workspace registration.
+ * Session logs are never touched: removing a registration leaves every
+ * session that ran in the directory in place, ungrouped.
+ * @param request - the worktree Workspace and whether to discard its changes.
+ * @returns discard confirmation.
+ */
+@Remote('discard') async discard(request: GitWorktreeDiscardRequest): Promise<GitWorktreeDiscardValue>
+```
+
+Source: [`packages/api/git-worktree-controller/src/index.ts`](../../packages/api/git-worktree-controller/src/index.ts)
 
 <a id="ctxterminalcontroller--terminalcontroller"></a>
 
@@ -438,6 +593,18 @@ Durable workspace registry. Startup waits for `sessionPersistence`, builds one c
  * @returns the existing or newly durable workspace.
  */
 async create(path: string, title?: string): Promise<Workspace>
+
+/**
+ * Create or reuse a workspace over an existing directory that is a linked
+ * `git worktree` of another workspace. The descriptor is written in the same
+ * single create write as the rest of the record, so an interrupted create
+ * never leaves a workspace half-described. The parent workspace must be
+ * registered; the directory must already exist and is the caller's
+ * responsibility to create.
+ * @param input - worktree directory, display title, and descriptor.
+ * @returns the newly durable, or already registered, workspace.
+ */
+createWorktree(input: WorkspaceWorktreeCreate): Promise<Workspace>
 
 /**
  * Look up a workspace by id.

@@ -50,6 +50,12 @@ interface Workspace {
   readonly updatedAt: string
 
   /**
+   * Worktree descriptor when this workspace is a linked `git worktree`, and
+   * `undefined` for an ordinary directory workspace. Immutable once written.
+   */
+  readonly worktree: WorkspaceWorktree | undefined
+
+  /**
    * Header-validated sessions in manually owned order: a new session is
    * prepended at attach, explicit reordering goes through
    * `insertSessionBefore`, and activity never reorders. The durable candidate
@@ -115,9 +121,45 @@ interface Workspace {
 
 所有权的真源是记录中有序的 `sessionIds`，绝不从会话 cwd 派生——但成员资格要求两者同时成立：账本上有其 id，且 header 的规范 cwd 等于工作区路径，因此一个会话在结构上至多属于一个工作区。失败的写入会拒绝（`insertSessionBefore` 的账本错误以 `WorkspaceMoveInvalidError` 拒绝，存储失败以普通错误拒绝）；每次被接受的变更都盖上 `updatedAt` 时间戳，并持久修剪不再通过成员资格检查的候选项。
 
+若某个工作区是链接的 `git worktree`，其来源记录在 `worktree` 中；除此之外它仍是普通工作区：成员资格、持久化与分组都只按其 path 对待它。
+
+```ts type-equiv
+/**
+ * Durable description of one workspace that is a linked `git worktree` of
+ * another workspace. The record stays an ordinary workspace in every other
+ * respect, so membership, persistence, and grouping treat it by its
+ * {@link Workspace.path} alone.
+ */
+interface WorkspaceWorktree {
+  /** Workspace owning the repository this worktree was cut from. */
+  readonly parentWorkspaceId: WorkspaceId
+  /** Canonical directory of the parent repository's main worktree. */
+  readonly repoPath: string
+  /** Branch checked out in this worktree. */
+  readonly branch: string
+  /** Branch the worktree branch was cut from. */
+  readonly baseBranch: string
+  /** Revision the worktree branch was cut at, exactly as `git rev-parse` printed it. */
+  readonly baseRevision: string
+}
+```
+
+```ts type-equiv
+/**
+ * Input to `WorkspaceRegistry.createWorktree`: an existing linked-worktree
+ * directory plus the descriptor to record with it in one create write.
+ */
+interface WorkspaceWorktreeCreate extends WorkspaceWorktree {
+  /** Existing directory the worktree occupies; canonicalized at create. */
+  readonly path: string
+  /** Display title; defaults to the final path segment when omitted. */
+  readonly title?: string
+}
+```
+
 ## 注册表：`ctx.workspaceRegistry`
 
-`WorkspaceRegistry`（[签名](#ctxworkspaceregistry--workspaceregistry)）拥有注册与解析。`create(path, title?)` 要求完全限定路径并将其规范化，拒绝不存在的路径（原样传出原始 `ENOENT`）或非目录；当规范路径已被拥有时原样返回既有实体；否则创建一条标题为 `title ?? defaultWorkspaceTitle(path)` 的记录并前插到持久的注册表顺序中（不同规范路径可以共享同一显示标题，没有最终路径段时使用根路径拼写）。`get(id)` 与有序的 `list()` 是同步缓存读取；`resolveByPath(path)` 应用同一套完全限定 realpath 规范但不创建。`delete(id)` 只移除注册记录、顺序条目和会话账本——目录、用户文件、实时会话和已持久化日志一概不动，因此这些会话变为 Ungrouped（[决策](../../.agents/notes/implemented/feature/2026-07-27-workspace-registration-deletion.zh.md)）；未知 id 返回 `false`。create 与 delete 会在其两次写入（记录 + 顺序）可能分叉之前先持久写入一个待定变更标记；启动时恰好解决被标记的那次变更——通过删除被标记的表行：这会补完被中断的 delete，并回滚被中断的 create（注册可以重建，因此回滚是安全方向）——而没有标记的顺序/表不一致则作为损坏大声失败。
+`WorkspaceRegistry`（[签名](#ctxworkspaceregistry--workspaceregistry)）拥有注册与解析。`create(path, title?)` 要求完全限定路径并将其规范化，拒绝不存在的路径（原样传出原始 `ENOENT`）或非目录；当规范路径已被拥有时原样返回既有实体；否则创建一条标题为 `title ?? defaultWorkspaceTitle(path)` 的记录并前插到持久的注册表顺序中（不同规范路径可以共享同一显示标题，没有最终路径段时使用根路径拼写）。`get(id)` 与有序的 `list()` 是同步缓存读取；`resolveByPath(path)` 应用同一套完全限定 realpath 规范但不创建。`delete(id)` 只移除注册记录、顺序条目和会话账本——目录、用户文件、实时会话和已持久化日志一概不动，因此这些会话变为 Ungrouped（[决策](../../.agents/notes/implemented/feature/2026-07-27-workspace-registration-deletion.zh.md)）；未知 id 返回 `false`。create 与 delete 会在其两次写入（记录 + 顺序）可能分叉之前先持久写入一个待定变更标记；启动时恰好解决被标记的那次变更——通过删除被标记的表行：这会补完被中断的 delete，并回滚被中断的 create（注册可以重建，因此回滚是安全方向）——而没有标记的顺序/表不一致则作为损坏大声失败。`createWorktree(input)` 对链接 worktree 目录走同一条 create 路径，并在 create 写入本身中记录 descriptor，因此失败绝不会留下已注册却缺失来源的检出；它会拒绝一个已注册为普通工作区的目录，因为那样 descriptor 会被静默丢弃。
 
 会话的 cwd 在创建时由创建者赋予，而不是由本注册表赋予——API 网关从所选工作区的 `path` 解析新会话的 cwd（回退到显式或默认 cwd），先创建会话使 cwd 落入其不可变的 [`SessionHeader`](persistence.zh.md#sessionheader--metadata-beside-the-log)，再调用 `attachSession`，后者会把已存储的 header cwd 与工作区路径重新校验一遍。首次成功启动时，注册表仅凭已持久化的 header（`id`、`cwd`、`createdAt`——绝不读事件正文）引导历史：把规范 cwd 有效的会话按目录分组为工作区，最新的排在最前；「已初始化」标记最后写入，因此被中断的引导可以安全续跑。引导只发生这一次：没有 cwd 的历史遗留会话保持 Ungrouped，此后创建的会话只能通过 `attachSession` 加入工作区。
 
@@ -182,6 +224,119 @@ Host service backing the generated `ctx.remote.directoryPicker` namespace. The s
 ```
 
 Source: [`packages/api/workspace-controller/src/directory-picker.ts`](../../packages/api/workspace-controller/src/directory-picker.ts)
+
+<a id="ctxgitworktree--gitworktree"></a>
+
+### `ctx.gitWorktree` — `GitWorktree`
+
+Linked-worktree operations over one repository. The service holds no cache: every call observes the repository as it is now, because a worktree can be removed or checked out by anything else on the machine.
+
+```ts cordis-catalog
+/**
+ * Observe one directory without mutating anything. Never throws for a
+ * missing git or a non-repository path: those are reported facts.
+ * @param path - Absolute directory to observe.
+ * @returns what the directory currently is.
+ */
+async probe(path: string): Promise<GitWorktreeProbe>
+
+/**
+ * Create one linked worktree under the configured root, on a new branch cut
+ * from `baseRef`, then run the configured copy and setup steps.
+ * @param request - parent repository, worktree name, and base revision.
+ * @returns the created directory, branch, and base revision.
+ * @throws GitWorktreeError with `git-unavailable`, `not-a-repository`,
+ * `unsupported-parent`, `invalid-name`, `path-exists`, `branch-exists`,
+ * `create-failed`, or `setup-failed`.
+ */
+async create(request: GitWorktreeCreateRequest): Promise<GitWorktreeCreateValue>
+
+/**
+ * List every worktree of one repository.
+ * @param repoPath - Any directory inside the parent repository.
+ * @returns one entry per registered worktree, in git's own order.
+ * @throws GitWorktreeError when the path is not a repository.
+ */
+async list(repoPath: string): Promise<GitWorktreeEntry[]>
+
+/**
+ * Observe one linked worktree relative to a base revision.
+ * @param request - worktree directory and the revision to compare against.
+ * @returns working-tree changes plus ahead/behind counts.
+ * @throws GitWorktreeError with `not-found` when the directory is gone.
+ */
+async status(request: GitWorktreeStatusRequest): Promise<GitWorktreeStatus>
+
+/**
+ * Merge one worktree branch into the parent repository's target ref. Refuses
+ * while the parent tree is dirty or mid-operation, and aborts on conflict so
+ * the parent is never left half-merged.
+ * @param request - parent repository, branch, and optional target ref.
+ * @returns whether the merge landed, or the conflicting paths.
+ * @throws GitWorktreeError with `parent-dirty`, `parent-busy`, or `merge-failed`.
+ */
+async merge(request: GitWorktreeMergeRequest): Promise<GitWorktreeMergeResult>
+
+/**
+ * Remove one linked worktree and its branch. The directory is removed first
+ * and the branch second, so a failure never leaves a branch whose checkout
+ * still exists.
+ * @param request - parent repository, worktree directory, branch, and force.
+ * @returns removal receipt.
+ * @throws GitWorktreeError with `remove-failed`.
+ */
+async remove(request: GitWorktreeRemoveRequest): Promise<GitWorktreeRemoveValue>
+```
+
+Source: [`packages/workspace/workspace-worktree/src/index.ts`](../../packages/workspace/workspace-worktree/src/index.ts)
+
+<a id="ctxgitworktreecontroller--gitworktreecontroller"></a>
+
+### `ctx.gitWorktreeController` — `GitWorktreeController`
+
+Host service backing the generated `ctx.remote.gitWorktree` namespace.
+
+```ts cordis-catalog
+/**
+ * Observe one directory without mutating anything.
+ * @param request - absolute directory to observe.
+ * @returns whether git is usable, whether the directory is a repository, and its state.
+ */
+@Remote('probe') async probe(request: GitWorktreeProbeRequest): Promise<GitWorktreeProbeValue>
+
+/**
+ * Create one linked worktree from a registered Workspace and register the
+ * checkout as a Workspace of its own.
+ * @param request - parent Workspace, worktree name, and optional base ref.
+ * @returns the new Worktree Workspace plus its checkout facts.
+ */
+@Remote('create') async create(request: GitWorktreeCreateRequest): Promise<GitWorktreeCreateValue>
+
+/**
+ * Read the working-tree state of one worktree Workspace.
+ * @param request - the worktree Workspace.
+ * @returns changes, ahead/behind counts, and conflicts, or a `missing` report.
+ */
+@Remote('status') async status(request: GitWorktreeStatusRequest): Promise<GitWorktreeStatusValue>
+
+/**
+ * Merge one worktree branch into its parent repository.
+ * @param request - the worktree Workspace.
+ * @returns whether the merge landed, and the conflicting paths when it did not.
+ */
+@Remote('merge') merge(request: GitWorktreeMergeRequest): Promise<GitWorktreeMergeValue>
+
+/**
+ * Remove one worktree checkout, its branch, and its Workspace registration.
+ * Session logs are never touched: removing a registration leaves every
+ * session that ran in the directory in place, ungrouped.
+ * @param request - the worktree Workspace and whether to discard its changes.
+ * @returns discard confirmation.
+ */
+@Remote('discard') async discard(request: GitWorktreeDiscardRequest): Promise<GitWorktreeDiscardValue>
+```
+
+Source: [`packages/api/git-worktree-controller/src/index.ts`](../../packages/api/git-worktree-controller/src/index.ts)
 
 <a id="ctxterminalcontroller--terminalcontroller"></a>
 
@@ -438,6 +593,18 @@ Durable workspace registry. Startup waits for `sessionPersistence`, builds one c
  * @returns the existing or newly durable workspace.
  */
 async create(path: string, title?: string): Promise<Workspace>
+
+/**
+ * Create or reuse a workspace over an existing directory that is a linked
+ * `git worktree` of another workspace. The descriptor is written in the same
+ * single create write as the rest of the record, so an interrupted create
+ * never leaves a workspace half-described. The parent workspace must be
+ * registered; the directory must already exist and is the caller's
+ * responsibility to create.
+ * @param input - worktree directory, display title, and descriptor.
+ * @returns the newly durable, or already registered, workspace.
+ */
+createWorktree(input: WorkspaceWorktreeCreate): Promise<Workspace>
 
 /**
  * Look up a workspace by id.
