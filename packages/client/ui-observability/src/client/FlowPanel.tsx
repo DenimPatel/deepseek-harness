@@ -1,17 +1,21 @@
 /**
  * Flow view: the Trajectory snapshot's records as readable per-turn ledgers, so
  * a person can see what the harness did under the hood after pressing submit.
+ * A request row expands to the request's recorded configuration, tool catalog,
+ * and system prompt; a tool row expands to its arguments, cut output, and
+ * nested dispatch calls.
  *
  * The seat is declared by the Trajectory plugin's session-standard
  * contribution, so it is absent in a composition that does not mount that
  * plugin; the unavailable copy is then the whole view.
  */
 
-import { useMemo, useState } from 'react'
+import { Fragment, useMemo, useState } from 'react'
 import type { UseTrajectory } from '@deepseek-ai/dsh-client-ui-trajectory/client'
 import type { ObservabilityTranslate } from './format.ts'
+import { formatDuration, formatTokens } from './format.ts'
 import { buildFlow } from './flow-model.ts'
-import type { FlowPromptChange, FlowRow } from './flow-model.ts'
+import type { FlowPromptChange, FlowRequestDetail, FlowRow, FlowToolDetail } from './flow-model.ts'
 import type { ObservabilityKey } from './locales.ts'
 import css from './FlowPanel.module.css'
 
@@ -30,6 +34,39 @@ const CHANGE_KEYS: Readonly<Record<FlowPromptChange, ObservabilityKey>> = {
   tools: 'flow.change.tools',
   'system-and-tools': 'flow.change.system-and-tools',
 }
+
+/** One request fact: its copy key and how its recorded value reads, when present. */
+const REQUEST_FACTS: readonly {
+  readonly key: ObservabilityKey
+  readonly value: (detail: FlowRequestDetail, t: ObservabilityTranslate) => string | undefined
+}[] = [
+  { key: 'flow.request.provider', value: detail => detail.provider },
+  { key: 'flow.request.model', value: detail => detail.model },
+  {
+    key: 'flow.request.temperature',
+    value: detail => detail.temperature === undefined ? undefined : String(detail.temperature),
+  },
+  {
+    key: 'flow.request.maxTokens',
+    value: detail => detail.maxTokens === undefined ? undefined : String(detail.maxTokens),
+  },
+  { key: 'flow.request.thinking', value: detail => detail.thinking },
+  { key: 'flow.request.effort', value: detail => detail.reasoningEffort },
+  {
+    key: 'flow.request.duration',
+    value: (detail, t) => detail.durationMs === undefined ? undefined : formatDuration(detail.durationMs, t),
+  },
+  {
+    key: 'flow.request.tokens',
+    value: (detail, t) => detail.tokens === undefined
+      ? undefined
+      : t('flow.request.tokens', {
+        input: formatTokens(detail.tokens.input, t),
+        output: formatTokens(detail.tokens.output, t),
+      }),
+  },
+  { key: 'flow.request.retry', value: detail => detail.retry },
+]
 
 /**
  * Render the harness flow for the current session.
@@ -107,7 +144,10 @@ function FlowLedger({ useTrajectory, loadOlder, t }: FlowLedgerProps): React.JSX
 /** One ledger row: its role chips and preview, expanding to the exact record. */
 function FlowLedgerRow({ row, t }: { readonly row: FlowRow; readonly t: ObservabilityTranslate }): React.JSX.Element {
   const [expanded, setExpanded] = useState(false)
-  const hasDetail = row.detail !== undefined || row.reasoning !== undefined
+  const hasDetail = row.detail !== undefined
+    || row.reasoning !== undefined
+    || row.request !== undefined
+    || row.tool !== undefined
   return (
     <li className={css.row}>
       <div className={css.rowHead}>
@@ -145,6 +185,69 @@ function FlowLedgerRow({ row, t }: { readonly row: FlowRow; readonly t: Observab
           <pre className={css.detail}>{row.detail}</pre>
         </>
       )}
+      {expanded && row.request !== undefined && <RequestFacts detail={row.request} t={t} />}
+      {expanded && row.tool !== undefined && <ToolFacts detail={row.tool} t={t} />}
     </li>
+  )
+}
+
+/** The recorded facts of one provider request: configuration, catalog, system prompt. */
+function RequestFacts({ detail, t }: { readonly detail: FlowRequestDetail; readonly t: ObservabilityTranslate }): React.JSX.Element {
+  return (
+    <>
+      <dl className={css.facts}>
+        {REQUEST_FACTS.map((fact) => {
+          const value = fact.value(detail, t)
+          return value === undefined
+            ? null
+            : (
+              <Fragment key={fact.key}>
+                <dt>{t(fact.key)}</dt>
+                <dd>{value}</dd>
+              </Fragment>
+            )
+        })}
+      </dl>
+      {detail.tools.length > 0 && (
+        <>
+          <p className={css.detailLabel}>{t('flow.request.tools')}</p>
+          <p className={css.toolNames}>{detail.tools.join(', ')}</p>
+        </>
+      )}
+      {detail.system !== undefined && (
+        <>
+          <p className={css.detailLabel}>{t('flow.role.system')}</p>
+          <pre className={css.detail}>{detail.system}</pre>
+        </>
+      )}
+    </>
+  )
+}
+
+/** The exact recorded material of one tool row. */
+function ToolFacts({ detail, t }: { readonly detail: FlowToolDetail; readonly t: ObservabilityTranslate }): React.JSX.Element {
+  return (
+    <>
+      {detail.arguments !== undefined && (
+        <>
+          <p className={css.detailLabel}>{t('flow.tool.arguments')}</p>
+          <pre className={css.detail}>{detail.arguments}</pre>
+        </>
+      )}
+      {detail.output !== undefined && (
+        <>
+          <p className={css.detailLabel}>{t('flow.tool.output')}</p>
+          <pre className={css.detail}>{detail.output}</pre>
+        </>
+      )}
+      {detail.subCalls.length > 0 && (
+        <>
+          <p className={css.detailLabel}>{t('flow.tool.subCalls')}</p>
+          <ul className={css.subCalls}>
+            {detail.subCalls.map(call => <li key={call}>{call}</li>)}
+          </ul>
+        </>
+      )}
+    </>
   )
 }

@@ -30,19 +30,40 @@ const SNAPSHOT = {
       isError: true, subCalls: [], call: null,
       content: [{ type: 'text', text: 'permission denied' }],
     },
+    {
+      kind: 'tool-result', seq: 5, time: 2_060, callId: 'c1', callTime: 2_055, isError: false,
+      subCalls: [{ name: 'inner', argsRaw: '{"deep":true}' }],
+      call: { name: 'read', argsRaw: '{"path":"x"}' },
+      content: [{ type: 'text', text: LONG_TEXT }],
+    },
   ],
   eventLocations: new Map(),
   requests: [{
     purpose: 'assistant', startSeq: 3, startedAt: 2_100, completedAt: 2_200, status: 'complete',
     turn: 1, step: 2,
     providerMetadata: { provider: 'deepseek', model: 'v4' },
-    requestConfig: { provider: 'deepseek', model: 'v4' },
-    prompt: { config: { provider: 'deepseek', model: 'v4' }, system: 'sys', tools: [{}, {}] },
+    requestConfig: { provider: 'deepseek', model: 'v4', temperature: 0.2, maxTokens: 2_048 },
+    prompt: {
+      config: { provider: 'deepseek', model: 'v4', temperature: 0.2, maxTokens: 2_048 },
+      system: 'you are a harness',
+      tools: [
+        { name: 'read', description: 'read a file', parameters: {} },
+        { name: 'bash', description: 'run a command', parameters: {} },
+      ],
+    },
     promptChange: { seq: 3, time: 2_100, kind: 'tools' },
+  }, {
+    // A running request records no prompt snapshot, so its facts are the
+    // configuration, the settlement it reported, and its retry ordinal.
+    purpose: 'assistant', startSeq: 60, startedAt: 2_400, completedAt: null, status: 'running',
+    turn: 1, step: 3,
+    providerMetadata: { provider: 'deepseek', model: 'v5' },
+    usage: { inputTokens: 5, outputTokens: 6 },
+    retry: 1,
   }],
   callSchemas: new Map(),
   partial: null,
-  runningCalls: [{ callId: 'c1', name: 'read', argsRaw: '{"path":"x"}', turn: 1, step: 2, time: 2_300, subCalls: [] }],
+  runningCalls: [{ callId: 'c2', name: 'grep', argsRaw: '{"q":"x"}', turn: 1, step: 2, time: 2_300, subCalls: [] }],
 } as unknown as TrajectorySnapshot
 
 const seat = (snapshot: TrajectorySnapshot): UseTrajectory => selector => selector(snapshot)
@@ -70,16 +91,16 @@ describe('FlowPanel', () => {
   it('renders one ledger per turn with roles, chips, counts, and previews', () => {
     render(<FlowPanel useTrajectory={seat(SNAPSHOT)} loadOlder={undefined} t={t} />)
     expect(screen.getByRole('heading', { name: zh['flow.turn'].replace('{value}', '1') })).toBeTruthy()
-    expect(screen.getAllByText(zh['flow.counts'].replace('{calls}', '1').replace('{messages}', '1')).length)
+    expect(screen.getAllByText(zh['flow.counts'].replace('{calls}', '3').replace('{messages}', '1')).length)
       .toBeGreaterThan(0)
     expect(screen.getByText(zh['flow.role.user'])).toBeTruthy()
     expect(screen.getByText('hello harness')).toBeTruthy()
     expect(screen.getByText('working on it')).toBeTruthy()
-    expect(screen.getByText('deepseek')).toBeTruthy()
+    expect(screen.getAllByText('deepseek').length).toBeGreaterThan(0)
     // The step chip, the tool-catalog chip, the prompt-change chip, and both states.
     expect(screen.getAllByText(zh['flow.step'].replace('{value}', '2')).length).toBeGreaterThan(0)
     expect(screen.getByText(zh['flow.tools'].replace('{value}', '2'))).toBeTruthy()
-    expect(screen.getByText(zh['flow.state.running'])).toBeTruthy()
+    expect(screen.getAllByText(zh['flow.state.running']).length).toBeGreaterThan(0)
     expect(screen.getByText(zh['flow.state.error'])).toBeTruthy()
     expect(screen.getByText(zh['flow.change.tools'])).toBeTruthy()
   })
@@ -98,6 +119,61 @@ describe('FlowPanel', () => {
     if (assistantRow === null) throw new Error('expected an assistant row')
     fireEvent.click(within(assistantRow).getByRole('button', { name: zh['flow.detail.show'] }))
     expect(within(assistantRow).getByText('weighing options')).toBeTruthy()
+  })
+
+  it('expands a request row to the request its record describes', () => {
+    render(<FlowPanel useTrajectory={seat(SNAPSHOT)} loadOlder={undefined} t={t} />)
+    // The first request row is the settled one carrying a prompt snapshot.
+    const requestRow = screen.getAllByText(zh['flow.role.request'])[0]?.closest('li')
+    if (requestRow === null || requestRow === undefined) throw new Error('expected a request row')
+    fireEvent.click(within(requestRow).getByRole('button', { name: zh['flow.detail.show'] }))
+    // Configuration, prompt change, catalog, and the exact system prompt.
+    expect(within(requestRow).getByText(zh['flow.request.provider'])).toBeTruthy()
+    // The provider also names the row, so the fact repeats its value.
+    expect(within(requestRow).getAllByText('deepseek').length).toBeGreaterThan(0)
+    expect(within(requestRow).getByText(zh['flow.request.temperature'])).toBeTruthy()
+    expect(within(requestRow).getByText('0.2')).toBeTruthy()
+    expect(within(requestRow).getByText(zh['flow.request.maxTokens'])).toBeTruthy()
+    expect(within(requestRow).getByText('2048')).toBeTruthy()
+    expect(within(requestRow).getByText(zh['flow.request.duration'])).toBeTruthy()
+    expect(within(requestRow).getByText(zh['flow.request.tools'])).toBeTruthy()
+    expect(within(requestRow).getByText('read, bash')).toBeTruthy()
+    expect(within(requestRow).getByText(zh['flow.role.system'])).toBeTruthy()
+    expect(within(requestRow).getByText('you are a harness')).toBeTruthy()
+    // Facts the record does not carry stay out of the table.
+    expect(within(requestRow).queryByText(zh['flow.request.retry'])).toBeNull()
+    expect(within(requestRow).queryByText(zh['flow.request.tokens'])).toBeNull()
+  })
+
+  it('renders only the request facts a running request actually recorded', () => {
+    render(<FlowPanel useTrajectory={seat(SNAPSHOT)} loadOlder={undefined} t={t} />)
+    const runningRow = screen.getAllByText(zh['flow.role.request'])[1]?.closest('li')
+    if (runningRow === null || runningRow === undefined) throw new Error('expected a second request row')
+    fireEvent.click(within(runningRow).getByRole('button', { name: zh['flow.detail.show'] }))
+    expect(within(runningRow).getByText(zh['flow.request.tokens'])).toBeTruthy()
+    expect(within(runningRow).getByText(zh['flow.request.retry'])).toBeTruthy()
+    // No prompt snapshot means no catalog, no system prompt, and no duration yet.
+    expect(within(runningRow).queryByText(zh['flow.request.temperature'])).toBeNull()
+    expect(within(runningRow).queryByText(zh['flow.request.maxTokens'])).toBeNull()
+    expect(within(runningRow).queryByText(zh['flow.request.duration'])).toBeNull()
+    expect(within(runningRow).queryByText(zh['flow.request.tools'])).toBeNull()
+    expect(within(runningRow).queryByText(zh['flow.role.system'])).toBeNull()
+  })
+
+  it('expands a tool row to its arguments, cut output, and nested calls', () => {
+    render(<FlowPanel useTrajectory={seat(SNAPSHOT)} loadOlder={undefined} t={t} />)
+    const toolRow = screen.getByText('read').closest('li')
+    if (toolRow === null) throw new Error('expected a tool row')
+    fireEvent.click(within(toolRow).getByRole('button', { name: zh['flow.detail.show'] }))
+    expect(within(toolRow).getByText(zh['flow.tool.arguments'])).toBeTruthy()
+    expect(within(toolRow).getByText('{"path":"x"}')).toBeTruthy()
+    expect(within(toolRow).getByText(zh['flow.tool.output'])).toBeTruthy()
+    expect(within(toolRow).getByText(LONG_TEXT)).toBeTruthy()
+    expect(within(toolRow).getByText(zh['flow.tool.subCalls'])).toBeTruthy()
+    expect(within(toolRow).getByText('inner {"deep":true}')).toBeTruthy()
+    // A tool row with nothing beyond its preview offers no control.
+    const deniedRow = screen.getByText('permission denied').closest('li')
+    expect(within(deniedRow as HTMLElement).queryByRole('button')).toBeNull()
   })
 
   it('keeps paging history until a page moves nothing', async () => {

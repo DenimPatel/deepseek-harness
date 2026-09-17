@@ -12,7 +12,6 @@ import type {
   StepLocation,
   TurnLocation,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
-import type { ConversationPromptSnapshot } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { TrajectorySnapshot } from '@deepseek-ai/dsh-client-ui-trajectory/client'
 import { buildFlow } from '../src/client/flow-model.ts'
 
@@ -70,7 +69,18 @@ const NODES: readonly ConversationNode[] = [
   }),
   node({ kind: 'assistant', seq: 15, time: 1_350, turn: 1, step: 1, blocks: [], interrupted: true }),
   node({
-    kind: 'tool-result', seq: 5, time: 1_400, callId: 'c2', call: null, callTime: null, isError: true, subCalls: [],
+    kind: 'tool-result', seq: 5, time: 1_400, callId: 'c2', call: null, callTime: null, isError: true,
+    subCalls: [
+      { name: 'nested', argsRaw: '{"deep":true}' },
+      {
+        kind: 'tool-result', seq: 5.1, time: 1_410, callId: 'c3', call: { name: 'inner', argsRaw: '{"x":1}' },
+        callTime: 1_405, content: [], isError: false, subCalls: [],
+      },
+      {
+        kind: 'tool-result', seq: 5.2, time: 1_415, callId: 'c4', call: null,
+        callTime: null, content: [], isError: false, subCalls: [],
+      },
+    ],
     content: [{ type: 'tool-result', toolCallId: 'c3', content: [{ type: 'text', text: 'nested' }] }],
   }),
   node({ kind: 'command', seq: 6, time: 1_500, commandId: 'cmd1', name: null, args: '--flag', outcome: null }),
@@ -97,6 +107,11 @@ const NODES: readonly ConversationNode[] = [
   }),
   node({ kind: 'turn-error', seq: 10, time: 1_900, turn: 1, step: 1, message: 'failed', code: 'E' }),
   node({ kind: 'turn-error', seq: 16, time: 1_910, turn: 1, step: 1, message: 'no code' }),
+  node({
+    kind: 'context', seq: 19, time: 1_955, source: null, form: null,
+    producer: { role: 'recall', label: 'recall' },
+    content: [{ type: 'text', text: 'turn-scoped context' }],
+  }),
   node({ kind: 'turn-max-tokens', seq: 11, time: 2_000, turn: 1, step: 1 }),
   node({
     kind: 'compaction', seq: 12, time: 2_100,
@@ -115,8 +130,15 @@ const REQUESTS: readonly RequestView[] = [
     turn: 1, step: 1,
     providerMetadata: { provider: 'deepseek', model: 'v4' },
     prompt: {
-      config: { provider: 'deepseek', model: 'v4' }, system: 'sys',
-      tools: [{}, {}] as unknown as ConversationPromptSnapshot['tools'],
+      config: {
+        provider: 'deepseek', model: 'v4', temperature: 0.3, maxTokens: 4_096,
+        thinking: 'on', reasoningEffort: 'high',
+      },
+      system: 'sys',
+      tools: [
+        { name: 'read', description: 'read a file', parameters: {} },
+        { name: 'bash', description: 'run a command', parameters: {} },
+      ],
     },
     promptChange: { seq: 20, time: 2_400, kind: 'system' },
   },
@@ -124,10 +146,24 @@ const REQUESTS: readonly RequestView[] = [
     purpose: 'assistant', startSeq: 40, startedAt: 4_000, completedAt: 4_100, status: 'error',
     error: 'boom', turn: 2, step: 1,
     requestConfig: { provider: 'deepseek', model: 'v5' },
+    usage: { inputTokens: 10, cacheReadTokens: 2, cacheWriteTokens: 1, outputTokens: 4 },
+    retry: 2, maxRetries: 3,
   },
   {
     purpose: 'compaction', startSeq: 30, startedAt: 3_000, completedAt: null, status: 'running',
-    turn: null, step: 0,
+    turn: null, step: 0, usage: {},
+  },
+  {
+    // A settlement that reports no usable prompt-side figure still counts output.
+    purpose: 'assistant', startSeq: 50, startedAt: 5_000, completedAt: 5_100, status: 'complete',
+    turn: 2, step: 2, requestConfig: { provider: 'deepseek', model: 'v6' }, retry: 1,
+    usage: { inputTokens: -1, outputTokens: 2, cacheReadTokens: 1 },
+  },
+  {
+    // A settlement that reports no output figure still counts its prompt side.
+    purpose: 'assistant', startSeq: 60, startedAt: 6_000, completedAt: 6_100, status: 'complete',
+    turn: 2, step: 3, requestConfig: { provider: 'deepseek', model: 'v7' },
+    usage: { inputTokens: 3 },
   },
 ]
 
@@ -143,6 +179,7 @@ const SNAPSHOT: TrajectorySnapshot = {
     [4, at(1, 2)],
     [5, { kind: 'unresolved' }],
     [6, at(2, 1)],
+    [19, at(1)],
   ]),
   requests: REQUESTS,
   callSchemas: new Map(),
@@ -162,9 +199,10 @@ describe('buildFlow', () => {
   })
 
   it('counts tool calls and messages per turn', () => {
-    expect(byTurn.get(1)).toMatchObject({ toolCalls: 1, messages: 2 })
+    // Both tool rows state no turn and land in the step that issued them.
+    expect(byTurn.get(1)).toMatchObject({ toolCalls: 2, messages: 2 })
     expect(byTurn.get(2)).toMatchObject({ toolCalls: 1, messages: 1 })
-    expect(byTurn.get(null)?.toolCalls).toBe(1)
+    expect(byTurn.get(null)?.toolCalls).toBe(0)
   })
 
   it('keeps the system prompt with its exact text when the preview is cut', () => {
@@ -191,16 +229,53 @@ describe('buildFlow', () => {
     const rows = byTurn.get(1)?.rows ?? []
     const assistant = rows.find(row => row.summary === 'Exploring the repo')
     expect(assistant).toMatchObject({ role: 'flow.role.assistant', reasoning: 'thinking hard', state: 'ok' })
-    expect(rows.filter(row => row.state === 'error')).toHaveLength(3)
+    // The interrupted assistant, both turn failures, and the failed tool row,
+    // which lands in the step that issued it.
+    expect(rows.filter(row => row.state === 'error')).toHaveLength(4)
   })
 
-  it('pairs tool results with their call and keeps the failure marker', () => {
+  it('pairs tool results with their call, their issuing step, and nested calls', () => {
     const rows = byTurn.get(1)?.rows ?? []
+    // The tool lifecycle states no turn, so the row takes the step that issued it.
     const paired = rows.find(row => row.name === 'bash')
-    expect(paired).toMatchObject({ role: 'flow.role.tool', summary: 'a b', detail: '{"cmd":"ls"}', state: 'ok' })
-    const unpaired = byTurn.get(null)?.rows.find(row => row.role === 'flow.role.tool')
-    expect(unpaired).toMatchObject({ summary: 'nested', state: 'error' })
+    expect(paired).toMatchObject({
+      role: 'flow.role.tool',
+      summary: 'a b',
+      step: 2,
+      state: 'ok',
+      tool: { arguments: '{"cmd":"ls"}', subCalls: [] },
+    })
+    const unpaired = rows.find(row => row.summary === 'nested')
+    expect(unpaired).toMatchObject({
+      role: 'flow.role.tool',
+      step: 2,
+      state: 'error',
+      // A call whose head left the window records no arguments, and its nested
+      // dispatches read by whichever shape each one carries, falling back to the
+      // call id when even the nested head is gone.
+      tool: { subCalls: ['nested {"deep":true}', 'inner {"x":1}', 'c4'] },
+    })
     expect(unpaired?.name).toBeUndefined()
+    expect(unpaired?.tool?.output).toBeUndefined()
+  })
+
+  it('keeps a tool row between turns when no positioned record precedes it', () => {
+    const turns = buildFlow({
+      eventNodes: [
+        node({
+          kind: 'tool-result', seq: 5, time: 50, callId: 'c9', call: null, callTime: null, isError: false,
+          subCalls: [], content: [{ type: 'text', text: 'orphan' }],
+        }),
+      ],
+      eventLocations: new Map(),
+      requests: [],
+      callSchemas: new Map(),
+      partial: null,
+      runningCalls: [],
+    })
+    expect(turns.map(turn => turn.turn)).toEqual([null])
+    expect(turns[0]?.toolCalls).toBe(1)
+    expect(turns[0]?.rows[0]).toMatchObject({ turn: null, step: null })
   })
 
   it('reads command lifecycle rows, including a running one without a name', () => {
@@ -235,6 +310,57 @@ describe('buildFlow', () => {
     const compaction = byTurn.get(null)?.rows.find(row => row.role === 'flow.role.request')
     expect(compaction).toMatchObject({ summary: '', state: 'running' })
     expect(compaction?.change).toBeUndefined()
+  })
+
+  it('carries the recorded request facts a reader needs to see the request itself', () => {
+    const request = byTurn.get(1)?.rows.find(row => row.role === 'flow.role.request')?.request
+    expect(request).toEqual({
+      provider: 'deepseek',
+      model: 'v4',
+      temperature: 0.3,
+      maxTokens: 4_096,
+      thinking: 'on',
+      reasoningEffort: 'high',
+      tools: ['read', 'bash'],
+      system: 'sys',
+      durationMs: 100,
+    })
+  })
+
+  it('carries the facts of a failed request and omits a record with nothing to show', () => {
+    const failed = byTurn.get(2)?.rows.find(row => row.role === 'flow.role.request')?.request
+    expect(failed).toEqual({
+      provider: 'deepseek',
+      model: 'v5',
+      tools: [],
+      durationMs: 100,
+      tokens: { input: 13, output: 4 },
+      retry: '2/3',
+    })
+    // A running compaction request records no configuration and no prompt.
+    const compaction = byTurn.get(null)?.rows.find(row => row.role === 'flow.role.request')
+    expect(compaction?.request).toBeUndefined()
+  })
+
+  it('reads an unusable prompt-side figure as no prompt tokens and a bare retry ordinal', () => {
+    const request = byTurn.get(2)?.rows
+      .filter(row => row.role === 'flow.role.request')
+      .map(row => row.request)
+      .find(detail => detail?.model === 'v6')
+    expect(request).toMatchObject({ tokens: { input: 1, output: 2 }, retry: '1' })
+  })
+
+  it('reads a report without an output figure as no output tokens', () => {
+    const request = byTurn.get(2)?.rows
+      .filter(row => row.role === 'flow.role.request')
+      .map(row => row.request)
+      .find(detail => detail?.model === 'v7')
+    expect(request).toMatchObject({ tokens: { input: 3, output: 0 } })
+  })
+
+  it('keeps a turn-scoped record at its turn and inherits the step in force', () => {
+    const row = byTurn.get(1)?.rows.find(entry => entry.summary === 'turn-scoped context')
+    expect(row).toMatchObject({ role: 'flow.role.context', turn: 1, step: 1 })
   })
 
   it('places the in-flight assistant prefix and the running tool call last in their turn', () => {

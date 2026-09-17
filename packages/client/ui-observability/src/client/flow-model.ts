@@ -9,6 +9,7 @@
 
 import type {
   AssistantBlock,
+  AssistantRequestConfig,
   ContextMessageNode,
   ConversationLocation,
   ConversationNode,
@@ -17,6 +18,7 @@ import type {
   RequestView,
   RunningToolCall,
   SystemPromptNode,
+  ToolCallBlock,
   ToolResultNode,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { TrajectorySnapshot } from '@deepseek-ai/dsh-client-ui-trajectory/client'
@@ -64,6 +66,49 @@ export interface FlowRow {
   readonly change?: FlowPromptChange
   /** Reasoning text recorded alongside an assistant message. */
   readonly reasoning?: string
+  /** Recorded request facts, present on a provider request row. */
+  readonly request?: FlowRequestDetail
+  /** Recorded tool material, present on a tool row. */
+  readonly tool?: FlowToolDetail
+}
+
+/**
+ * What one provider request recorded: its configuration, the prompt snapshot it
+ * carried, and what it cost. Every field is optional because a compaction
+ * request, a running request, and a window that holds no header each record a
+ * different subset; the ledger shows only what exists.
+ */
+export interface FlowRequestDetail {
+  /** Provider the request was issued to. */
+  readonly provider?: string
+  /** Model the request asked for. */
+  readonly model?: string
+  readonly temperature?: number
+  readonly maxTokens?: number
+  /** Thinking switch the request sent, when it set one. */
+  readonly thinking?: string
+  /** Reasoning-effort setting the request sent, when it set one. */
+  readonly reasoningEffort?: string
+  /** Offered tool catalog, by name; empty when the window holds no header. */
+  readonly tools: readonly string[]
+  /** Complete system prompt in force for the request. */
+  readonly system?: string
+  /** Wall time from issue to settlement, when the request settled. */
+  readonly durationMs?: number
+  /** Token totals the settlement reported, when it reported any. */
+  readonly tokens?: { readonly input: number; readonly output: number }
+  /** Retry ordinal this request ran as, as `n` or `n/max`, when it was a retry. */
+  readonly retry?: string
+}
+
+/** Exact recorded material of one tool row: arguments, cut output, nested calls. */
+export interface FlowToolDetail {
+  /** Raw call arguments as recorded. */
+  readonly arguments?: string
+  /** Result text, present when the one-line preview cut it. */
+  readonly output?: string
+  /** Nested dispatch calls, each rendered as its recorded name and arguments. */
+  readonly subCalls: readonly string[]
 }
 
 /** One turn's ledger, or the between-turns group when `turn` is `null`. */
@@ -141,11 +186,22 @@ function systemPromptRow(prompt: SystemPromptNode): FlowRow {
   }
 }
 
+/** One nested dispatch call, as its recorded name and arguments. */
+function subCallText(call: ToolCallBlock): string {
+  if ('argsRaw' in call) return `${call.name} ${call.argsRaw}`.trim()
+  return call.call === null ? call.callId : `${call.call.name} ${call.call.argsRaw}`.trim()
+}
+
 /** One ledger row for a tool result, paired with its call head when in-window. */
 function toolResultRow(node: ToolResultNode, locations: ReadonlyMap<number, ConversationLocation>): FlowRow {
   const { turn, step } = locate(node.seq, {}, locations)
   const output = preview(contentText(node.content))
-  const detail = output.detail ?? node.call?.argsRaw
+  const tool: FlowToolDetail = {
+    ...node.call === null ? {} : { arguments: node.call.argsRaw },
+    ...output.detail === undefined ? {} : { output: output.detail },
+    subCalls: node.subCalls.map(subCallText),
+  }
+  const recorded = tool.arguments !== undefined || tool.output !== undefined || tool.subCalls.length > 0
   return {
     key: `tool:${node.seq}:${node.callId}`,
     seq: node.seq,
@@ -156,7 +212,7 @@ function toolResultRow(node: ToolResultNode, locations: ReadonlyMap<number, Conv
     ...node.call === null ? {} : { name: node.call.name },
     summary: output.summary,
     state: node.isError ? 'error' : 'ok',
-    ...detail === undefined ? {} : { detail },
+    ...recorded ? { tool } : {},
   }
 }
 
@@ -305,11 +361,88 @@ function nodeRow(node: ConversationNode, locations: ReadonlyMap<number, Conversa
   }
 }
 
+/** One finite non-negative number, or null when the report is unusable. */
+function nonNegative(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null
+}
+
+/**
+ * The token totals one settled request reported.
+ * @param usage - the request record's optional usage value.
+ * @returns prompt-side and output totals, or `undefined` when it reported none.
+ */
+function usageTotals(usage: unknown): { input: number; output: number } | undefined {
+  if (typeof usage !== 'object' || usage === null) return undefined
+  const record = usage as Record<string, unknown>
+  const input = nonNegative(record.inputTokens)
+  const output = nonNegative(record.outputTokens)
+  if (input === null && output === null) return undefined
+  return {
+    input: (input ?? 0) + (nonNegative(record.cacheReadTokens) ?? 0) + (nonNegative(record.cacheWriteTokens) ?? 0),
+    output: output ?? 0,
+  }
+}
+
+/**
+ * The retry ordinal of one request, as `n` or `n/max`.
+ * @param request - one assembled request record.
+ * @returns the ordinal text, or `undefined` when the request was not a retry.
+ */
+function retryOrdinal(request: RequestView): string | undefined {
+  if (request.purpose !== 'assistant' || request.retry === undefined) return undefined
+  return request.maxRetries === undefined ? String(request.retry) : `${request.retry}/${request.maxRetries}`
+}
+
+/**
+ * The recorded facts of one provider request.
+ * @param request - one assembled request record.
+ * @returns the detail, or `undefined` when the record carries nothing to show.
+ */
+function requestDetail(request: RequestView): FlowRequestDetail | undefined {
+  const snapshot = request.purpose === 'assistant' ? request.prompt : undefined
+  const config: AssistantRequestConfig | undefined = snapshot?.config ?? request.requestConfig
+  const provider = request.providerMetadata?.provider ?? request.requestConfig?.provider
+  const model = request.providerMetadata?.model ?? request.requestConfig?.model
+  const tokens = usageTotals(request.usage)
+  const retry = retryOrdinal(request)
+  const system = snapshot === undefined || snapshot.system === '' ? undefined : snapshot.system
+  // A request still in flight has no duration; a negative one is a clock skew.
+  const durationMs = request.completedAt === null
+    ? undefined
+    : Math.max(0, request.completedAt - request.startedAt)
+  const detail: FlowRequestDetail = {
+    ...provider === undefined ? {} : { provider },
+    ...model === undefined ? {} : { model },
+    ...config?.temperature === undefined ? {} : { temperature: config.temperature },
+    ...config?.maxTokens === undefined ? {} : { maxTokens: config.maxTokens },
+    ...config?.thinking === undefined ? {} : { thinking: config.thinking },
+    ...config?.reasoningEffort === undefined ? {} : { reasoningEffort: config.reasoningEffort },
+    tools: (snapshot?.tools ?? []).map(tool => tool.name),
+    ...system === undefined ? {} : { system },
+    ...durationMs === undefined ? {} : { durationMs },
+    ...tokens === undefined ? {} : { tokens },
+    ...retry === undefined ? {} : { retry },
+  }
+  const empty = detail.provider === undefined
+    && detail.model === undefined
+    && detail.tools.length === 0
+    && detail.system === undefined
+    && detail.durationMs === undefined
+    && detail.tokens === undefined
+    && detail.retry === undefined
+    && detail.temperature === undefined
+    && detail.maxTokens === undefined
+    && detail.thinking === undefined
+    && detail.reasoningEffort === undefined
+  return empty ? undefined : detail
+}
+
 /** One ledger row for a provider request, carrying its prompt-change fact. */
 function requestRow(request: RequestView): FlowRow {
   const provider = request.providerMetadata?.provider ?? request.requestConfig?.provider
   const model = request.providerMetadata?.model ?? request.requestConfig?.model ?? ''
   const tools = request.purpose === 'assistant' ? request.prompt?.tools.length : undefined
+  const detail = requestDetail(request)
   return {
     key: `request:${request.startSeq}`,
     seq: request.startSeq,
@@ -325,6 +458,7 @@ function requestRow(request: RequestView): FlowRow {
       ? { change: request.promptChange.kind }
       : {},
     ...request.error === undefined ? {} : { detail: request.error },
+    ...detail === undefined ? {} : { request: detail },
   }
 }
 
@@ -391,6 +525,34 @@ function compareTurns(left: FlowTurn, right: FlowTurn): number {
 }
 
 /**
+ * Give tool rows the turn and step in force where they sit.
+ *
+ * A tool row is assembled from the tool lifecycle rather than from a step
+ * boundary, so its record states no turn and the snapshot's location map has no
+ * entry for it. It still belongs to the step that issued it: the last
+ * positioned record before it. Every other row keeps the turn its own record
+ * states, including the `null` that marks a between-turns record.
+ * @param rows - rows in any order.
+ * @returns the rows in log order, each tool row holding the turn in force at its position.
+ */
+function attributeTurns(rows: readonly FlowRow[]): FlowRow[] {
+  let turn: number | null = null
+  let step: number | null = null
+  const positioned: FlowRow[] = []
+  for (const row of [...rows].sort((left, right) => left.seq - right.seq || left.key.localeCompare(right.key))) {
+    if (row.turn === null) {
+      positioned.push(row.role === 'flow.role.tool' ? { ...row, turn, step } : row)
+      continue
+    }
+    // A new turn resets the step; within one turn a null step keeps the step in force.
+    if (row.turn !== turn || row.step !== null) step = row.step
+    turn = row.turn
+    positioned.push({ ...row, step: row.step ?? step })
+  }
+  return positioned
+}
+
+/**
  * Group the Trajectory snapshot's records into readable turn ledgers.
  * @param snapshot - the assembled Trajectory snapshot for one session.
  * @returns one ledger per turn, oldest first, with the between-turns group last.
@@ -404,7 +566,7 @@ export function buildFlow(snapshot: TrajectorySnapshot): FlowTurn[] {
   for (const call of snapshot.runningCalls) rows.push(runningCallRow(call))
 
   const groups = new Map<number | null, FlowRow[]>()
-  for (const row of rows) {
+  for (const row of attributeTurns(rows)) {
     const bucket = groups.get(row.turn)
     if (bucket === undefined) groups.set(row.turn, [row])
     else bucket.push(row)
