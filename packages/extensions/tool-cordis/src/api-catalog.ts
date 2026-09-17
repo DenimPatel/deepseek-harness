@@ -1092,7 +1092,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'changes, ahead/behind counts, and conflicts, or a `missing` report.',
       },
       {
-        signature: '@Remote(\'merge\') merge(request: GitWorktreeMergeRequest): Promise<GitWorktreeMergeValue>',
+        signature: '@Remote(\'merge\') async merge(request: GitWorktreeMergeRequest): Promise<GitWorktreeMergeValue>',
         description: 'Merge one worktree branch into its parent repository.',
         parameters: [{ name: 'request', description: 'the worktree Workspace.' }],
         returns: 'whether the merge landed, and the conflicting paths when it did not.',
@@ -3646,6 +3646,14 @@ export const EVENT_API: readonly EventApiEntry[] = [
     parameters: [],
   },
   {
+    name: 'step-mode/advance',
+    mode: 'waterfall',
+    signature: '\'step-mode/advance\'( this: Scoped<Agent>, request: StepAdvanceRequestEvent, next: () => Promise<StepAdvanceDecision>, ): Promise<StepAdvanceDecision>',
+    summary: 'Ask composed answerers how to advance one paused agent.',
+    description: 'Ask composed answerers how to advance one paused agent. Return a decision to claim the pause or call `next()` to delegate. With no claiming answerer the dispatch default resumes, so an unattended run never hangs. Scope-filtered dispatch (`@deepseek-ai/dsh-scope`): agent-scoped listeners receive only that agent.',
+    parameters: [{ name: 'request', description: 'the held unit and its cancellation lifetime.' }, { name: 'next', description: 'delegates to the remaining answerers.' }],
+  },
+  {
     name: 'subagent/end',
     mode: 'emit',
     signature: '\'subagent/end\'(this: Scoped<SubagentRuntime>, info: SubagentRunEndInfo): void',
@@ -6016,6 +6024,26 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'SshStreamEndpoint',
     declaration: 'export type SshStreamEndpoint = z.infer<typeof streamEndpointSchema>;',
+  },
+  {
+    name: 'StepAdvanceAction',
+    declaration: 'export type StepAdvanceAction = \'step\' | \'resume\';',
+  },
+  {
+    name: 'StepAdvanceDecision',
+    declaration: 'export interface StepAdvanceDecision {\n    readonly action: StepAdvanceAction;\n}',
+  },
+  {
+    name: 'StepAdvanceRequestEvent',
+    declaration: 'export interface StepAdvanceRequestEvent {\n    readonly agent: Agent;\n    readonly signal?: AbortSignal;\n    readonly breakpoint: StepBreakpoint;\n    readonly turn: number;\n    readonly step: number;\n    readonly call?: StepCallIdentity;\n}',
+  },
+  {
+    name: 'StepBreakpoint',
+    declaration: 'export type StepBreakpoint = \'context\' | \'tool\';',
+  },
+  {
+    name: 'StepCallIdentity',
+    declaration: 'export interface StepCallIdentity {\n    readonly callId: string;\n    readonly name: string;\n}',
   },
   {
     name: 'StorageBackend',

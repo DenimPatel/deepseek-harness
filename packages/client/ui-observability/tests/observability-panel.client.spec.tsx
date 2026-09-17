@@ -31,6 +31,7 @@ function props(over: {
   readonly projections?: Record<string, unknown>
   readonly byId?: Record<string, unknown>
   readonly snapshot?: TrajectorySnapshot
+  readonly controls?: React.ReactNode
 } = {}): ObservabilityPanelProps {
   const projections = over.projections ?? {}
   const byId = over.byId ?? {}
@@ -45,6 +46,7 @@ function props(over: {
     useSessions: (selector: (state: unknown) => unknown) => selector({ byId }),
     useTrajectory,
     loadOlder: () => Promise.resolve(false),
+    renderSlot: (key: string) => key === 'sidebar.right.pane.tab.controls' ? over.controls ?? null : null,
     t,
   } as unknown as ObservabilityPanelProps
 }
@@ -123,5 +125,17 @@ describe('ObservabilityPanel', () => {
     fireEvent.click(screen.getByRole('tab', { name: zh['view.history'] }))
     expect(screen.getByText(zh['history.table.title'])).toBeTruthy()
     expect(screen.getByText(zh['history.trend.tokens'])).toBeTruthy()
+  })
+
+  it('renders the control strip seat above the views', () => {
+    render(<ObservabilityPanel {...props({ projections: FIGURES, controls: <p>held</p> })} />)
+
+    expect(screen.getByText('held')).toBeTruthy()
+  })
+
+  it('leaves the control strip empty when nothing occupies it', () => {
+    render(<ObservabilityPanel {...props({ projections: FIGURES })} />)
+
+    expect(screen.queryByText('held')).toBeNull()
   })
 })

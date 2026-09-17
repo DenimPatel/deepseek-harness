@@ -2171,6 +2171,31 @@
       "doc": "docs/subsystems/mcp.md",
       "symbol": "McpResourceProvider",
       "source": "packages/mcp/mcp-resources/src/index.ts"
+    },
+    {
+      "doc": "docs/subsystems/step-mode.md",
+      "symbol": "StepBreakpoint",
+      "source": "packages/interaction/step-mode/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/step-mode.md",
+      "symbol": "StepAdvanceAction",
+      "source": "packages/interaction/step-mode/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/step-mode.md",
+      "symbol": "StepCallIdentity",
+      "source": "packages/interaction/step-mode/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/step-mode.md",
+      "symbol": "StepAdvanceRequestEvent",
+      "source": "packages/interaction/step-mode/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/step-mode.md",
+      "symbol": "StepAdvanceDecision",
+      "source": "packages/interaction/step-mode/src/types.ts"
     }
   ]
 }

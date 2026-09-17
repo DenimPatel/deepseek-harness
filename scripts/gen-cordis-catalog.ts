@@ -189,6 +189,7 @@ export const SERVICE_WALK_EXEMPTIONS: Record<string, string> = {
   sidebarRight: 'client-side right-Sidebar navigation face — packages/client/ui-sidebar-right/README.md owns the API',
   sidebarRightTabs: 'client-side right-Sidebar tab-type registry — packages/client/ui-sidebar-right/README.md owns the API',
   documentPreviews: 'client-side document renderer registry — docs/subsystems/sidebar-right.md owns the API',
+  stepMode: 'client-side interface-typed browser service — packages/client/ui-step-mode/README.md owns the API',
 }
 
 /**
@@ -222,6 +223,7 @@ export const EVENT_SCOPE_PAGE: Record<string, string> = {
   'session-telemetry': 'session-telemetry.md',
   'feedback': 'feedback.md',
   'tools': 'tools.md',
+  'step-mode': 'step-mode.md',
   'user-questions': 'user-questions.md',
   'webserver': 'web-server.md',
   'workflow': 'workflow.md',
@@ -382,6 +384,10 @@ export const LINK_MAP: Readonly<Record<string, string>> = {
   ApprovalRequestEvent: 'approval.md',
   ApprovalService: 'approval.md',
   AskUserQuestionRequestEvent: 'user-questions.md',
+  StepAdvanceDecision: 'step-mode.md',
+  StepAdvanceRequestEvent: 'step-mode.md',
+  StepBreakpoint: 'step-mode.md',
+  StepCallIdentity: 'step-mode.md',
   AdmittedPromptContentPart: 'attachment.md',
   AttachmentAdmissionPart: 'attachment.md',
   AttachmentError: 'attachment.md',

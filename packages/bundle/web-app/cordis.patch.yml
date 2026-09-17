@@ -72,6 +72,17 @@
     - id: workspace
       name: '@deepseek-ai/dsh-workspace'
 
+    # Step execution mode: the host holds each model request and tool dispatch
+    # at the pause points this row configures, until a browser answers the
+    # `step-mode/advance` waterfall. Arming is the `/step` command; nothing
+    # pauses without it, so headless companions of this profile are unaffected.
+    - id: step-mode
+      name: '@deepseek-ai/dsh-step-mode'
+      config:
+        breakpoints:
+          - context
+          - tool
+
     # Parallel edits: linked git worktree checkouts, one per Session that asks
     # for isolation. Mounted with no configuration, so nothing is copied and no
     # setup command runs until a deployment sets one.
@@ -251,6 +262,12 @@
     # provider/model, and sub-agent views over existing session projections.
     - id: ui-observability
       name: '@deepseek-ai/dsh-client-ui-observability'
+
+    # The step-mode browser half: the pause takeover over the composer, the
+    # composer Step button, and the Observability panel's pause controls. It
+    # answers the Host `step-mode/advance` waterfall this profile forwards.
+    - id: ui-step-mode
+      name: '@deepseek-ai/dsh-client-ui-step-mode'
 
     - id: ui-settings
       name: '@deepseek-ai/dsh-client-ui-settings'

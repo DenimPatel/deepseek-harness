@@ -9,7 +9,9 @@
 
 import { useState } from 'react'
 import clsx from 'clsx'
-import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type {
+  InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime,
+} from '@deepseek-ai/dsh-client-ui-slots'
 // Type-only: merge the projection keys this body reads into SessionProjectionMap.
 import type {} from '@deepseek-ai/dsh-api-session-controller/client'
 import type {} from '@deepseek-ai/dsh-client-ui-session/client'
@@ -19,6 +21,8 @@ import type {} from '@deepseek-ai/dsh-session-stats/client'
 import type {} from '@deepseek-ai/dsh-subagent/client'
 import type {} from '@deepseek-ai/dsh-token-meter/client'
 import { buildAgentTree, buildHistoryRows, hasSessionFigures } from './observability-model.ts'
+// Type-only: the panel's own controls seat declared in the contract module.
+import type {} from './contract/slots.ts'
 import type { ObservabilityInjected } from './face.ts'
 import { FlowPanel } from './FlowPanel.tsx'
 import { HistoryPanel } from './HistoryPanel.tsx'
@@ -29,6 +33,7 @@ import css from './ObservabilityPanel.module.css'
 
 export type ObservabilityPanelProps =
   & PropsRuntime<'sidebar.right.pane.tab'>
+  & PropsRenderSlots<'sidebar.right.pane.tab.controls'>
   & PropsLocale<typeof NS>
   & InjectFace<ObservabilityInjected>
 
@@ -59,6 +64,7 @@ export function ObservabilityPanel({
   useSessions,
   useTrajectory,
   loadOlder,
+  renderSlot,
   t,
 }: ObservabilityPanelProps): React.JSX.Element {
   const [view, setView] = useState<DashboardView>('session')
@@ -108,6 +114,7 @@ export function ObservabilityPanel({
           ))}
         </div>
       </header>
+      {renderSlot('sidebar.right.pane.tab.controls', {})}
       <div className={css.body}>{bodies[view]()}</div>
     </div>
   )

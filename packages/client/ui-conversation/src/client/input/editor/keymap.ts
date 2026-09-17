@@ -20,6 +20,7 @@ import {
   KEY_ESCAPE_COMMAND, KEY_SPACE_COMMAND, KEY_TAB_COMMAND, PASTE_COMMAND,
 } from 'lexical'
 import { mergeRegister } from '@lexical/utils'
+import type { ComposerSubmitGesture } from '../../contract/composer-submission.ts'
 import type { ArbitrateKey, ArbitrateOutcome } from '../../contract/draft-editor.ts'
 
 /** The bar-supplied behavior behind each intercepted gesture. */
@@ -32,8 +33,8 @@ export interface ComposerKeymapHandlers {
   dismissPopup(): void
   /** Whether Enter may submit right now (locked/busy states refuse). */
   canSubmit(): boolean
-  /** The Enter gesture after every guard passed; `accelerated` = Ctrl/Cmd held. */
-  submit(accelerated: boolean): void
+  /** The Enter gesture after every guard passed; the modifier held picks the gesture. */
+  submit(gesture: ComposerSubmitGesture): void
   /** Pasted files (image intake). */
   intakeFiles(files: readonly File[]): void
   /** Pasted plain text (sanitized insertion through the shell). */
@@ -140,7 +141,9 @@ export function registerComposerKeymap(editor: LexicalEditor, handlers: Composer
       event?.preventDefault()
       if (event?.repeat === true) return true // held-down Enter must not machine-gun sends
       if (!handlers.canSubmit()) return true
-      handlers.submit(event?.ctrlKey === true || event?.metaKey === true)
+      handlers.submit(event?.altKey === true
+        ? 'step'
+        : event?.ctrlKey === true || event?.metaKey === true ? 'accelerated' : 'enter')
       return true
     }, COMMAND_PRIORITY_CRITICAL),
     editor.registerCommand(PASTE_COMMAND, (event) => {

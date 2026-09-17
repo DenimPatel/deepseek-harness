@@ -44,6 +44,21 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
   }
 }
 
+/**
+ * The optional companion that arms a run for stepping, provided as
+ * `ctx.stepMode` by the step-mode browser plugin. Declared structurally here
+ * rather than imported, so the composer can delegate its `Alt+Enter` gesture
+ * without depending on that plugin's package.
+ */
+interface StepArm {
+  /**
+   * Arm the addressed Session's next run.
+   * @param sessionId - Session whose Agent receives the arm command.
+   * @returns Whether the Host accepted the command.
+   */
+  armNextRun(sessionId: SessionId): Promise<boolean>
+}
+
 /** Services required by the Conversation plugin. */
 export const inject = [
   'slots', 'sessions', 'fileUpload', 'uiSession', 'uiWorkspace', 'locale', 'settingsScope',
@@ -339,6 +354,7 @@ export function apply(ctx: Context, config: Config = Config({})): void {
           retryFileUpload: undefined,
           toggleCommandMenu: undefined,
           stop: undefined,
+          stepRun: undefined,
           hooks: {
             busyEnter: submissionPolicy.busyEnter,
             fileUploads: ABSENT_FILE_UPLOADS,
@@ -390,6 +406,13 @@ export function apply(ctx: Context, config: Config = Config({})): void {
           scopedConversation(sessions, sessionId).cancel().catch(() => {
             // Stop failure is published through Session promptError.
           })
+        },
+        stepRun: async () => {
+          // Read through ctx at call time: the step-mode browser plugin
+          // provides this service, and neither package imports the other.
+          const stepMode = ctx.get('stepMode') as StepArm | undefined
+          if (stepMode === undefined) return null
+          return await stepMode.armNextRun(sessionId) ? null : t('input.stepUnavailable')
         },
         hooks: {
           busyEnter: submissionPolicy.busyEnter,

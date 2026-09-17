@@ -25,6 +25,7 @@ import { ObservabilityPanel } from './ObservabilityPanel.tsx'
 import { en, NS, zh } from './locales.ts'
 
 export { NS } from './locales.ts'
+export type { ObservabilityControlsOwnerProps } from './contract/slots.ts'
 
 /** Unique implementation identity; also the slot key its body registers under. */
 export const OBSERVABILITY_TAB_ID = '@deepseek-ai/dsh-client-ui-observability'
@@ -60,6 +61,9 @@ export function apply(ctx: ClientContext): void {
       name: 'sidebar.right.pane.tab',
       key: OBSERVABILITY_TAB_ID,
       locale: NS,
+      children: {
+        'sidebar.right.pane.tab.controls': { kind: 'single', scope: 'session' },
+      },
       inject: (sessionId: SessionId): ObservabilityInjected => ({
         loadOlder: async () => {
           const session = ctx.sessions.binding(sessionId)?.session

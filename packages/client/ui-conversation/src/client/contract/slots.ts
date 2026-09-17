@@ -313,6 +313,13 @@ export interface ComposerBarInjected {
   retryFileUpload: ((id: DraftAttachmentId) => void) | undefined
   toggleCommandMenu: ((selection: EditSelection) => void) | undefined
   stop: (() => void) | undefined
+  /**
+   * Arm the addressed Session's next run for stepping, then submit its draft.
+   * Absent when no step-mode provider is composed, and `Alt+Enter` then submits
+   * exactly as plain Enter does; a resolved string is the provider's localized
+   * refusal, shown in place of the submission.
+   */
+  stepRun?: (() => Promise<string | null>) | undefined
   hooks: {
     /**
      * Live busy-state submission preference: the delivery mode plain Enter

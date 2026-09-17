@@ -2453,6 +2453,33 @@ export interface Config {
 
 Source: [`packages/ssh/ssh/src/index.ts:17`](../packages/ssh/ssh/src/index.ts)
 
+<a id="deepseek-aidsh-step-mode"></a>
+
+## `@deepseek-ai/dsh-step-mode`
+
+Requires: `agents`
+
+```ts config-catalog
+/**
+ * Plugin config. `breakpoints` selects which pause points this deployment
+ * offers; an empty list disables stepping without unloading the plugin, and
+ * the `/step` command still arms and reports.
+ */
+export interface Config {
+  /** Pause points to hold at (default `['context', 'tool']`). */
+  breakpoints?: StepBreakpoint[]
+}
+
+/**
+ * One configured pause point. `context` holds the agent after its step claimed
+ * input and assembled the request, before the model request is prepared;
+ * `tool` holds it before each tool dispatch, including `run_code` sub-calls.
+ */
+export type StepBreakpoint = 'context' | 'tool'
+```
+
+Source: [`packages/interaction/step-mode/src/index.ts:40`](../packages/interaction/step-mode/src/index.ts)
+
 <a id="deepseek-aidsh-storage-domain"></a>
 
 ## `@deepseek-ai/dsh-storage-domain`
@@ -3693,6 +3720,7 @@ These load from a `cordis.yml` entry with no `config:` block; they declare no co
 - `@deepseek-ai/dsh-client-ui-sidebar-right` ([`packages/client/ui-sidebar-right/src/index.ts`](../packages/client/ui-sidebar-right/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-sidebar-terminal` ([`packages/client/ui-sidebar-terminal/src/index.ts`](../packages/client/ui-sidebar-terminal/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-skill` ([`packages/client/ui-skill/src/index.ts`](../packages/client/ui-skill/src/index.ts))
+- `@deepseek-ai/dsh-client-ui-step-mode` ([`packages/client/ui-step-mode/src/index.ts`](../packages/client/ui-step-mode/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-subagent` ([`packages/client/ui-subagent/src/index.ts`](../packages/client/ui-subagent/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-theme` ([`packages/client/ui-theme/src/index.ts`](../packages/client/ui-theme/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-tool` ([`packages/client/ui-tool/src/index.ts`](../packages/client/ui-tool/src/index.ts))

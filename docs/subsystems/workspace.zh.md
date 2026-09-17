@@ -324,7 +324,7 @@ Host service backing the generated `ctx.remote.gitWorktree` namespace.
  * @param request - the worktree Workspace.
  * @returns whether the merge landed, and the conflicting paths when it did not.
  */
-@Remote('merge') merge(request: GitWorktreeMergeRequest): Promise<GitWorktreeMergeValue>
+@Remote('merge') async merge(request: GitWorktreeMergeRequest): Promise<GitWorktreeMergeValue>
 
 /**
  * Remove one worktree checkout, its branch, and its Workspace registration.

@@ -19,6 +19,13 @@ interface DraftViewGate {
   showToast: (text: string) => void
   t: ComposerBarProps['t']
   canAcceptDrop: boolean
+  /**
+   * Arm the next run for stepping before its prompt is delivered; resolves the
+   * localized failure to show instead of submitting, or null once armed.
+   * Absent when no step-mode provider is composed, and the gesture then
+   * submits exactly as plain Enter does.
+   */
+  stepRun?: (() => Promise<string | null>) | undefined
 }
 
 /**
@@ -116,12 +123,12 @@ export function installDraftKeymap(
     },
     dismissPopup: () => { keyboard.dismissPopup() },
     canSubmit: () => !gate.current.locked && !gate.current.machineBusy,
-    submit: (accelerated) => {
+    submit: (gesture) => {
       const g = gate.current
       // Empty-draft accelerated Enter acts on the queue instead of the
       // (empty) draft: the machine rejects empty drafts, so the gesture
       // steers every still-pending queued message into the running turn.
-      if (accelerated && g.canSteerQueue) {
+      if (gesture === 'accelerated' && g.canSteerQueue) {
         keyboard.steerQueue()
         return
       }
@@ -129,10 +136,23 @@ export function installDraftKeymap(
         g.showToast(g.t('file.stillUploading'))
         return
       }
+      if (gesture === 'step' && g.stepRun !== undefined) {
+        // The arm must land before the prompt: an armed agent pauses at its
+        // first pause point, and a refused arm keeps the draft rather than
+        // starting a run the user did not ask for.
+        void g.stepRun().then((failure) => {
+          if (failure !== null) {
+            g.showToast(failure)
+            return
+          }
+          keyboard.submit(resolveSubmitMode(g.busyEnter, g.running, 'enter', g.steeringAvailable))
+        })
+        return
+      }
       keyboard.submit(resolveSubmitMode(
         g.busyEnter,
         g.running,
-        accelerated ? 'accelerated' : 'enter',
+        gesture === 'accelerated' ? 'accelerated' : 'enter',
         g.steeringAvailable,
       ))
     },

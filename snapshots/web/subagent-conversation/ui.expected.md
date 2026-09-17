@@ -68,6 +68,7 @@
 - button "Add files or run commands":
   - img
 - 'button "Access mode, current: Custom"': Custom
+- button "Send the prompt and pause at each step" [disabled]: Step run
 - button "6% of context used"
 - button "Send message" [disabled]
 - button "2 turns 2 steps · {{throughput}} tok/s":

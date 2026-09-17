@@ -38,5 +38,6 @@
 - button "Add files or run commands" [disabled]:
   - img
 - 'button "Access mode, current: Custom" [disabled]': Custom
+- button "Send the prompt and pause at each step" [disabled]: Step run
 - button "Stop generating"
 - button "Send message" [disabled]

@@ -57,6 +57,9 @@
       "path": "../../interaction/user-approval"
     },
     {
+      "path": "../../interaction/step-mode"
+    },
+    {
       "path": "../../interaction/user-questions"
     },
     {

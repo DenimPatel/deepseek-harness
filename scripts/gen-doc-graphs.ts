@@ -192,6 +192,20 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'Owns Session commands, cold reads, durable-event following, live control state, model catalogs, workspace opening, and Agent activation policy.',
   },
   {
+    key: 'gitWorktreeController',
+    pkg: 'api-git-worktree-controller',
+    title: 'Host git-worktree Remote controller',
+    mode: 'core',
+    note: 'Projects the per-Session worktree service onto the generated Remote namespace: probe, create, merge, discard, and status live here.',
+  },
+  {
+    key: 'gitWorktree',
+    pkg: 'workspace-worktree',
+    title: 'Per-Session linked worktree checkouts',
+    mode: 'core',
+    note: 'Owns one linked checkout per Session that asks for isolation, including its branch and optional setup command.',
+  },
+  {
     key: 'sessionFileReferences',
     pkg: 'api-session-controller',
     title: 'Session-addressed file-reference Remote adapter',
