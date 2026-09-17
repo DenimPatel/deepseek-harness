@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-16-observability-activity-timeline-and-flow.md
-2026-09-16-observability-activity-timeline-and-flow.md: 242999783db8db3fde4d76203cb7950c22b70d4c
-2026-09-16-observability-activity-timeline-and-flow.zh.md: 38d3d062d5a86eccc196977c3483183e4060cfdc
+2026-09-16-observability-activity-timeline-and-flow.md: df08419b45d8b4f717606d4f60cd54be595b4b3d
+2026-09-16-observability-activity-timeline-and-flow.zh.md: feae9e7a95279d5171489f2d124d1ace94dbdb7f

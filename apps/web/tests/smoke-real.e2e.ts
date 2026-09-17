@@ -309,7 +309,7 @@ const notReady = UI_PLUGIN_DIRS.filter((dir) => {
 if (notReady.length > 0) console.warn(`[smoke-real] skipped — client bundles not ready: ${notReady.join(', ')}`)
 
 describe('dsh web keyless CLI smoke', () => {
-  it('serves a usable app from two immutable plugin batches', async () => {
+  it('serves a usable app from immutable plugin batches', async () => {
     requireDist()
     const sessionsDir = mkdtempSync(join(tmpdir(), 'dsh-web-keyless-'))
     const tsxLoader = pathToFileURL(createRequire(join(REPO_ROOT, 'package.json')).resolve('tsx')).href
@@ -356,7 +356,10 @@ describe('dsh web keyless CLI smoke', () => {
       await page.goto(readyUrl)
       await page.getByRole('button', { name: 'New session', exact: true }).first().waitFor({ timeout: 30_000 })
       const batchPaths = [...new Set(pluginScripts)].sort()
-      expect(batchPaths).toHaveLength(2)
+      // The application phase is partitioned against a 3 KiB combo-URL budget,
+      // which the client rows now fill twice; the parser-preload batch carries
+      // the modules row alone.
+      expect(batchPaths).toHaveLength(3)
       expect(batchPaths).toContainEqual(expect.stringMatching(
         /^\/plugins\/\?\?.+\/client\.js,.+\/client\.js&rev=[a-f\d]{12}$/,
       ))
@@ -364,10 +367,8 @@ describe('dsh web keyless CLI smoke', () => {
         /^\/plugins\/\?\?@deepseek-ai\/dsh-client-modules\/client\.js&rev=[a-f\d]{12}$/,
       ))
       const readyOrigin = new URL(readyUrl).origin
-      expect([...cacheHeaders.values()]).toEqual([
-        'public, max-age=31536000, immutable',
-        'public, max-age=31536000, immutable',
-      ])
+      expect([...cacheHeaders.values()])
+        .toEqual(batchPaths.map(() => 'public, max-age=31536000, immutable'))
       for (const path of batchPaths) {
         const [scriptResponse, mapResponse] = await Promise.all([
           fetch(`${readyOrigin}${path}`),

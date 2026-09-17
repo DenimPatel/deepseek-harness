@@ -140,3 +140,43 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+
+.facts {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 2px 8px;
+  margin: 0;
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xs-13);
+}
+
+.facts dt {
+  color: var(--dsw-alias-label-caption);
+}
+
+.facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.toolNames {
+  margin: 0;
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xs-13);
+  overflow-wrap: anywhere;
+}
+
+.subCalls {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xs-13);
+}
+
+.subCalls li {
+  overflow-wrap: anywhere;
+}
