@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-This package gives clients whole-session turn and step counts plus LLM, tool, first-token, and decode wall times through the public `sessionStats` value. The figures come from the complete durable log, so paging and compaction do not change them. Use it when a client must display consistent conversation statistics across reloads and reduced history. When whole-session statistics are unavailable, clients can use window-scoped counting instead.
+This package gives clients whole-session turn and step counts, LLM, tool, first-token, and decode wall times through the public `sessionStats` value, plus a bounded activity histogram through `activitySeries`. Both figures come from the complete durable log, so paging and compaction do not change them. Use it when a client must display consistent conversation statistics across reloads and reduced history, or plot how much happened over the session's own clock. When whole-session statistics are unavailable, clients can use window-scoped counting instead.
 
 ## Table of Contents
 
@@ -48,9 +48,32 @@ Mount the plugin beside the session store and the projection registry when clien
 
 Every field is 0 until its first contributing event; the composed registry always serves the key, so clients read the value rather than key presence. Clients render whole-log figures through the projection seam's snapshot and change feed; the reference consumer is the web chat stats strip, whose window fold mirrors these field names as its no-unit fallback.
 
+### The activity histogram
+
+`activitySeries` answers "how much happened, when" over the same complete log: a fixed grid of time buckets, each holding one sample per counted metric. The columns are `apiRequests`, `apiErrors`, `retries`, `toolCalls`, `toolErrors`, `subagentSpawns`, `turnsStarted`, `stepsClosed`, the four token columns (`tokensUncachedInput`, `tokensCacheRead`, `tokensCacheWrite`, `tokensOutput`), and the `contextTokens` gauge. Counts come from the counted event types the fold names; the token columns and the gauge come from a settled `assistant/message` usage report.
+
+The value carries its own grid: `originMs` anchors it at the first counted event, `bucketMs` is the current bucket width, and column index `i` covers `[originMs + i * bucketMs, originMs + (i + 1) * bucketMs)` in every metric, so a reader never has to know the width separately.
+
+### Bucket policy
+
+`bucketMs` (default 5000) and `maxBuckets` (default 240) are this plugin's `Config`. When a sample would land at or past `maxBuckets`, the fold first doubles `bucketMs` and merges adjacent pairs, which keeps the persisted state bounded and also bounds the padding a long idle gap can allocate. Counts and token sums add when pairs merge; the `contextTokens` gauge keeps the later non-zero reading.
+
+### Config
+
+```yaml
+- name: '@deepseek-ai/dsh-session-stats'
+  config:
+    bucketMs: 5000
+    maxBuckets: 240
+```
+
+### Listing hints
+
+`activitySeries` is deliberately **not** a Session-list hint: the list reader names the keys it carries, so a growth-with-session value stays a per-Session read instead of riding every listed row. See [Session projection subsystem](../../../docs/subsystems/session-projection.md).
+
 ### Failures and recovery
 
-The unit is inert without the projection registry: `inject` keeps the fiber pending and nothing registers, so other assemblies lack the `sessionStats` key. Unmounting the plugin removes the key, because registrations are effects on the mounting fiber. A crash-interrupted step counts after the session reloads, when crash recovery appends its synthetic `step/end`.
+The unit is inert without the projection registry: `inject` keeps the fiber pending and nothing registers, so other assemblies lack the `sessionStats` and `activitySeries` keys. Unmounting the plugin removes both keys, because registrations are effects on the mounting fiber. A crash-interrupted step counts after the session reloads, when crash recovery appends its synthetic `step/end`.
 
 -----
 
@@ -70,9 +93,12 @@ The unit is a pure fold over committed session events: `step/end` is the counted
 
 | File | Role |
 |---|---|
-| [`src/index.ts`](src/index.ts) | Plugin entry: `inject`, unit registration on the mounting fiber |
-| [`src/projection.ts`](src/projection.ts) | The fold: state shape, per-event transitions, wire view |
+| [`src/index.ts`](src/index.ts) | Plugin entry: `inject`, `Config`, both unit registrations on the mounting fiber |
+| [`src/projection.ts`](src/projection.ts) | The `sessionStats` fold: state shape, per-event transitions, wire view |
 | [`src/types.ts`](src/types.ts) | One home of the `sessionStats` projection-key declaration and field types |
+| [`src/activity-projection.ts`](src/activity-projection.ts) | The `activitySeries` fold: bucketing, coarsening, and column writes |
+| [`src/activity-metrics.ts`](src/activity-metrics.ts) | The closed metric vocabulary and which columns are gauges |
+| [`src/activity-types.ts`](src/activity-types.ts) | One home of the `activitySeries` projection-key declaration |
 
 ### Data model
 
@@ -84,6 +110,8 @@ The fold state holds the eight totals plus in-flight boundaries: `lastTurn` (tur
 - First-token latency records the first non-empty delta chunk and survives an in-step `llm/retry`.
 - Decode time and tokens accrue only over steps carrying both a first token and a valid provider usage report; malformed usage is ignored like the window fold guards node usage.
 - Tool time pairs `tool/call` → `tool/result` by callId; unresolved calls are dropped at `turn/end` because results land within their turn, and a callId colliding with an `Object` prototype name reads as unmatched.
+- The activity fold counts only the event types it names. Event types contributed by other packages (`llm/retry`, `llm/retry-started`, `subagent/catalog`) are read by name from one table, because naming them in the switch would make this package depend on their contributors' host types.
+- A reading whose time precedes the grid anchor (clock skew) lands in the first bucket instead of a negative index.
 
 </details>
 
@@ -119,7 +147,10 @@ These limits define what the figures describe and when the unit is absent. They 
 - **Steps count work attempted, not visible output** — a step that failed before producing visible content still closes with `step/end` and counts; a step interrupted by a crash counts after the session reloads, when crash recovery appends its synthetic `step/end`.
 - **A cancelled step is counted but untimed** — no assistant message assembles, so its partial stream time enters no wall-time figure; a max-tokens usage-host message conversely contributes model time the surface does not show.
 - **Counts are log-scoped, not surface-scoped** — steps whose messages were later compacted away stay counted; the figures describe the whole session, not the current model-visible surface.
-- **Mounted only where the projection registry is composed** — other assemblies serve no `sessionStats` key, and their consumers fall back to window-scoped counting.
+- **Mounted only where the projection registry is composed** — other assemblies serve no `sessionStats` or `activitySeries` key, and their consumers fall back to window-scoped counting.
+- **The histogram's token columns count settled messages** — a model attempt that never assembles an `assistant/message` contributes no token sample, so the series can trail the `tokenUsage` session total for heavily retried turns; the session total remains authoritative.
+- **Bucket width changes over a long session** — the geometric roll-up keeps state bounded by doubling the width, so early buckets end up coarser than late ones; readers must take `bucketMs` from the value rather than assume the configured default.
+- **A bucket's context gauge is a reading, not an aggregate** — the column records the prompt-side figure of the last settled message in that bucket, and a bucket with no such report keeps its `0`.
 
 <a id="dev-note"></a>
 ### Dev Note

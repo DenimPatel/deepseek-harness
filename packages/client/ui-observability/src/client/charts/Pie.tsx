@@ -1,12 +1,14 @@
 /**
  * Hand-built donut chart: one `<circle>` per segment using stroke arithmetic,
- * plus a legend and a "view as table" fallback. Pure props in, SVG and DOM out.
+ * plus a legend, inside the shared chart shell whose table exposes exact values.
+ * Pure props in, SVG and DOM out.
  */
 
-import { useState } from 'react'
 import clsx from 'clsx'
 import { formatTokens } from '../format.ts'
 import type { ObservabilityTranslate } from '../format.ts'
+import { ChartSection } from './ChartSection.tsx'
+import type { ChartSectionRow } from './ChartSection.tsx'
 import css from './Pie.module.css'
 
 /** Series tone selecting a semantic palette entry; colors live in the module CSS. */
@@ -39,23 +41,23 @@ const CIRCUMFERENCE = 2 * Math.PI * RADIUS
  * @returns the chart section.
  */
 export function Pie({ title, slices, emptyLabel, t }: PieProps): React.JSX.Element {
-  const [showTable, setShowTable] = useState(false)
   const total = slices.reduce((sum, slice) => sum + Math.max(0, slice.value), 0)
-  const tableId = `pie-table-${title.replace(/\s+/g, '-').toLowerCase()}`
-
-  if (total <= 0) {
-    return (
-      <section className={css.root} aria-label={t('chart.aria', { title })}>
-        <h3 className={css.title}>{title}</h3>
-        <p className={css.empty}>{emptyLabel}</p>
-      </section>
-    )
-  }
+  const rows: readonly ChartSectionRow[] = slices.map(slice => ({
+    key: slice.key,
+    label: slice.label,
+    value: String(Math.round(slice.value)),
+  }))
 
   let offset = 0
   return (
-    <section className={css.root} aria-label={t('chart.aria', { title })}>
-      <h3 className={css.title}>{title}</h3>
+    <ChartSection
+      title={title}
+      emptyLabel={emptyLabel}
+      empty={total <= 0}
+      rows={rows}
+      idPrefix="pie-table"
+      t={t}
+    >
       <div className={css.body}>
         <svg className={css.chart} viewBox="0 0 100 100" role="img" aria-label={t('chart.aria', { title })}>
           <g transform="rotate(-90 50 50)">
@@ -95,33 +97,6 @@ export function Pie({ title, slices, emptyLabel, t }: PieProps): React.JSX.Eleme
           ))}
         </ul>
       </div>
-      <button
-        type="button"
-        className={css.tableToggle}
-        aria-expanded={showTable}
-        aria-controls={tableId}
-        onClick={() => { setShowTable(current => !current) }}
-      >
-        {showTable ? t('table.hide') : t('table.show')}
-      </button>
-      {showTable && (
-        <table className={css.table} id={tableId}>
-          <thead>
-            <tr>
-              <th scope="col">{t('table.metric')}</th>
-              <th scope="col">{t('table.value')}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {slices.map(slice => (
-              <tr key={slice.key}>
-                <th scope="row">{slice.label}</th>
-                <td>{String(Math.round(slice.value))}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-    </section>
+    </ChartSection>
   )
 }

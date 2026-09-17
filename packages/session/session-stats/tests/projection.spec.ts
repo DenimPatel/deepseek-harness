@@ -67,6 +67,9 @@ describe('sessionStats projection unit (registry drive)', () => {
     const { ctx, session } = await harness(true)
     const changes: { key: string; value: unknown; seq: number }[] = []
     ctx.sessionProjections.onChanged((_session, key, value, seq) => {
+      // The plugin also serves `activitySeries`, so this spec observes the
+      // `sessionStats` cell of the shared change feed only.
+      if (key !== 'sessionStats') return
       changes.push({ key, value, seq })
     })
     session.append('turn/start', { turn: 1 })
@@ -82,7 +85,6 @@ describe('sessionStats projection unit (registry drive)', () => {
     // counts, so each closed step notifies twice with the step/end value last.
     const counted = changes.filter(change => (change.value as SessionStatsProjection).steps > 0
       || change.seq === firstSeq)
-    expect(changes.every(change => change.key === 'sessionStats')).toBe(true)
     expect(counted.map(change => ({ seq: change.seq, value: change.value }))).toContainEqual(
       { seq: firstSeq, value: totals({ turns: 1, steps: 1 }) },
     )

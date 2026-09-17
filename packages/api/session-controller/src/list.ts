@@ -6,6 +6,7 @@ import type { ImageAttachmentLimits } from '@deepseek-ai/dsh-attachment'
 import { SessionLogOffset } from '@deepseek-ai/dsh-session'
 import type { Session, SessionEvent, SessionHeader, SessionId } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-session-projection'
+import type { SessionProjectionMap } from '@deepseek-ai/dsh-session-projection/types'
 import type {} from '@deepseek-ai/dsh-session-projection-cache'
 import { SessionQueryError, type SessionSearchCursor } from '@deepseek-ai/dsh-session-query'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
@@ -22,6 +23,38 @@ import type {
 const SEARCH_PROVIDER_CALL_LIMIT = 100
 const SESSION_SEARCH_QUERY_MAX_CHARS = 500
 const MESSAGE_TYPES = new Set(['user/message', 'assistant/message'])
+
+/**
+ * The projection keys every listed Session row carries.
+ *
+ * Only keys named here become list hints. A projection whose value grows with
+ * the session — the activity histogram, the turn outline — stays a per-Session
+ * read instead of multiplying every row's payload, and a newly contributed key
+ * is excluded until it is deliberately named here.
+ *
+ * The stored form is `string` because this compilation face does not reference
+ * every projection contributor; `SessionProjectionValues` already admits values
+ * contributed outside the face, and {@link listHintKeys} narrows the same set
+ * back to the registry's key type at the read site.
+ */
+const LIST_HINT_PROJECTION_KEYS: readonly string[] = [
+  'title',
+  'sessionListMetadata',
+  'tokenUsage',
+  'contextPressure',
+  'sessionStats',
+  'modelSelection',
+  'subagentTiming',
+  'subagent',
+  'subagentCatalog',
+  'agentPreset',
+  'schedule',
+]
+
+/** The list-hint allowlist as the projection registry's face-bound key type. */
+function listHintKeys(): readonly Extract<keyof SessionProjectionMap, string>[] {
+  return LIST_HINT_PROJECTION_KEYS as readonly Extract<keyof SessionProjectionMap, string>[]
+}
 
 const sessionListMetadataSchema: z.ZodType<SessionListMetadata> = z.object({
   blank: z.boolean(),
@@ -274,14 +307,15 @@ export class ApiSessionList {
       const block = session === undefined
         ? header.isSeeded
           ? undefined
-          : cache?.cachedSnapshot(header, SessionLogOffset(0))
+          : cache?.cachedSnapshot(header, SessionLogOffset(0), listHintKeys())
             ?? cache?.cachedPredecessorTitle(header, SessionLogOffset(0))
-        : this.ctx.sessionProjections.cachedSnapshot(session)
+        : this.ctx.sessionProjections.cachedSnapshot(session, listHintKeys())
       return block !== undefined && Object.keys(block.values).length > 0
         ? {
           asOfSeq: block.asOfSeq,
-          // Listing hints contain every currently cached wire value but remain
-          // partial: missing cells and cache rows are never materialized here.
+          // Listing hints contain every allowlisted cached wire value but
+          // remain partial: missing cells and cache rows are never materialized
+          // here.
           values: block.values as SessionProjectionValues,
         }
         : undefined

@@ -9,15 +9,9 @@
   stroke-width: 0.5;
 }
 
-.line {
-  stroke: var(--dsw-alias-state-business-primary);
-  stroke-width: 1.5;
-  stroke-linejoin: round;
-  stroke-linecap: round;
-}
-
-.dot {
+.bar {
   fill: var(--dsw-alias-state-business-primary);
+  opacity: 0.85;
 }
 
 .axisLabel {

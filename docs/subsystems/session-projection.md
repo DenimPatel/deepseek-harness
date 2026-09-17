@@ -101,6 +101,10 @@ type ProjectionChangeListener = (
 
 `snapshot(session)` is fully synchronous: a carrier reads it in the same tick as its page slice, so `asOfSeq` covers both reads at one sequence number. It returns only client views, and every value passes its unit's `viewSchema` before return. `stateOf(session, key)` reads one live host state without computing unrelated views; callers must not mutate the borrowed reference. A state-reference change computes one cached raw view, and the change feed fires only when that result changes by `Object.is`; an object-valued view must preserve its reference to suppress publication across internal-only state changes.
 
+### Session-list hints
+
+A carrier that summarizes many sessions at once reads a deliberately small subset of keys. The Session list names that subset explicitly in `api-session-controller`, so **a registered key is not a list hint unless it is named there**. A value that grows with the session — an activity histogram, a turn outline — therefore stays a per-Session read instead of riding every listed row, and a newly contributed key is excluded by default rather than by remembering to exclude it.
+
 ## The registry: `ctx.sessionProjections`
 
 `SessionProjectionRegistry` ([signatures](#ctxsessionprojections--sessionprojectionregistry)) owns the drive: one `session/event` subscription, eager `apply` over every registered unit, and per-session per-unit watermark cells. Cells build lazily — a unit registered after events flowed, or a session older than the registry, folds `init` over the in-memory log on first touch (event or read). Registration is an effect whose disposer rides the calling fiber: an unloaded domain plugin's key (with its cached cells) disappears from subsequent drives and snapshots, and clients read that as capability absence; a duplicate key with a different `stateVersion` throws, while same-version registrants share one unit and are counted. Domain plugins register under `ctx.inject(['sessionProjections'], …)` so headless assemblies without the registry stay unaffected.

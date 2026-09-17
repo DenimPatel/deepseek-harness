@@ -469,20 +469,22 @@ describe('session.history projections block', () => {
 })
 
 describe('session.list projections column', () => {
-  it('serves every already-materialized wire value from the live registry without folding', async () => {
+  it('serves allowlisted already-materialized wire values from the live registry without folding', async () => {
     const { ctx, session } = await harness(true)
-    ctx.sessionProjections.register(lastUserUnit())
+    ctx.sessionProjections.register(agentPresetProjectionDefinition)
     const gateway = remote(ctx)
     await new Promise(resolve => setTimeout(resolve, 0))
     session.append('turn/start', { turn: 1 })
-    seedMessages(session, 1)
+    session.append('agent-preset/selected', { agentPreset: 'minimal' })
     const response = await gateway.list(request({}))
     if (!response.ok) throw new Error('unreachable')
     const row = response.value.items.find(item => item.sessionId === session.id)
-    expect(row?.projections?.values['test/last-user']).toEqual({ text: 'm0' })
+    // `agentPreset` is a list-hint key; the unlisted `test/last-user` used by
+    // other cases stays a per-Session read (see the list-hint spec).
+    expect(row?.projections?.values.agentPreset).toBe('minimal')
     expect(row?.projections?.values.sessionListMetadata).toEqual({
       blank: false,
-      lastPromptAt: session.eventAt(SessionSeq(session.seq - 1))?.time,
+      lastPromptAt: null,
     })
     expect(row?.projections?.asOfSeq).toBe(session.seq - 1)
   })
@@ -506,15 +508,14 @@ describe('session.list projections column', () => {
   it('omits an unmaterialized live projection instead of folding history for listing', async () => {
     const { ctx, session } = await harness(true)
     seedMessages(session, 1)
-    const unit = lastUserUnit()
-    const apply = vi.fn(unit.apply)
-    ctx.sessionProjections.register({ ...unit, apply })
+    const apply = vi.fn(agentPresetProjectionDefinition.apply)
+    ctx.sessionProjections.register({ ...agentPresetProjectionDefinition, apply })
 
     const response = await remote(ctx).list(request({}))
     if (!response.ok) throw new Error('unreachable')
     const row = response.value.items.find(item => item.sessionId === session.id)
     expect(row).toBeDefined()
-    expect('test/last-user' in (row?.projections?.values ?? {})).toBe(false)
+    expect('agentPreset' in (row?.projections?.values ?? {})).toBe(false)
     expect(apply).not.toHaveBeenCalled()
   })
 

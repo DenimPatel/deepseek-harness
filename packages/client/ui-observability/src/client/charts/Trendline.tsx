@@ -1,10 +1,12 @@
 /**
- * Hand-built trend line: an SVG polyline over a numeric series, with a
- * "view as table" fallback for exact values. Pure props in, SVG and DOM out.
+ * Hand-built trend line: an SVG polyline over a numeric series, inside the
+ * shared chart shell whose table exposes exact values. Pure props in, SVG and
+ * DOM out.
  */
 
-import { useState } from 'react'
 import type { ObservabilityTranslate } from '../format.ts'
+import { ChartSection } from './ChartSection.tsx'
+import type { ChartSectionRow } from './ChartSection.tsx'
 import css from './Trendline.module.css'
 
 /** One measured point; `x` is a comparable ordinal (index or timestamp). */
@@ -40,18 +42,12 @@ const PAD_BOTTOM = 20
  * @returns the chart section.
  */
 export function Trendline({ title, valueLabel, points, emptyLabel, t, formatValue }: TrendlineProps): React.JSX.Element {
-  const [showTable, setShowTable] = useState(false)
-  const tableId = `trend-table-${title.replace(/\s+/g, '-').toLowerCase()}`
   const format = formatValue ?? ((value: number) => String(Math.round(value)))
-
-  if (points.length === 0) {
-    return (
-      <section className={css.root} aria-label={t('chart.aria', { title })}>
-        <h3 className={css.title}>{title}</h3>
-        <p className={css.empty}>{emptyLabel}</p>
-      </section>
-    )
-  }
+  const rows: readonly ChartSectionRow[] = points.map(point => ({
+    key: point.key,
+    label: point.label,
+    value: format(point.y),
+  }))
 
   const xs = points.map(point => point.x)
   const ys = points.map(point => point.y)
@@ -67,8 +63,14 @@ export function Trendline({ title, valueLabel, points, emptyLabel, t, formatValu
   const path = points.map(point => `${scaleX(point.x)},${scaleY(point.y)}`).join(' ')
 
   return (
-    <section className={css.root} aria-label={t('chart.aria', { title })}>
-      <h3 className={css.title}>{title}</h3>
+    <ChartSection
+      title={title}
+      emptyLabel={emptyLabel}
+      empty={points.length === 0}
+      rows={rows}
+      idPrefix="trend-table"
+      t={t}
+    >
       <svg className={css.chart} viewBox={`0 0 ${WIDTH} ${HEIGHT}`} role="img" aria-label={t('chart.aria', { title })}>
         <line className={css.axis} x1={PAD_X} y1={HEIGHT - PAD_BOTTOM} x2={WIDTH - PAD_X} y2={HEIGHT - PAD_BOTTOM} />
         <polyline className={css.line} points={path} fill="none" />
@@ -78,33 +80,6 @@ export function Trendline({ title, valueLabel, points, emptyLabel, t, formatValu
         <text className={css.axisLabel} x={PAD_X} y={PAD_TOP - 6}>{format(yMax)}</text>
         <text className={css.axisLabel} x={WIDTH - PAD_X} y={HEIGHT - PAD_BOTTOM + 14} textAnchor="end">{valueLabel}</text>
       </svg>
-      <button
-        type="button"
-        className={css.tableToggle}
-        aria-expanded={showTable}
-        aria-controls={tableId}
-        onClick={() => { setShowTable(current => !current) }}
-      >
-        {showTable ? t('table.hide') : t('table.show')}
-      </button>
-      {showTable && (
-        <table className={css.table} id={tableId}>
-          <thead>
-            <tr>
-              <th scope="col">{t('table.metric')}</th>
-              <th scope="col">{t('table.value')}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {points.map(point => (
-              <tr key={point.key}>
-                <th scope="row">{point.label}</th>
-                <td>{format(point.y)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-    </section>
+    </ChartSection>
   )
 }

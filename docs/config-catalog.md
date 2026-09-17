@@ -2171,6 +2171,24 @@ export interface Config {
 
 Source: [`packages/context/session-reference/src/config.ts:11`](../packages/context/session-reference/src/config.ts)
 
+<a id="deepseek-aidsh-session-stats"></a>
+
+## `@deepseek-ai/dsh-session-stats`
+
+Requires: `sessionProjections`
+
+```ts config-catalog
+/** Config: the activity histogram's bucket policy. */
+export interface Config {
+  /** Width of the finest activity bucket, ms. */
+  bucketMs: number
+  /** Bucket count above which the activity grid doubles its width. */
+  maxBuckets: number
+}
+```
+
+Source: [`packages/session/session-stats/src/index.ts:29`](../packages/session/session-stats/src/index.ts)
+
 <a id="deepseek-aidsh-session-telemetry-otel"></a>
 
 ## `@deepseek-ai/dsh-session-telemetry-otel`
@@ -3666,7 +3684,6 @@ These load from a `cordis.yml` entry with no `config:` block; they declare no co
 - `@deepseek-ai/dsh-session` ([`packages/core/session/src/index.ts`](../packages/core/session/src/index.ts))
 - `@deepseek-ai/dsh-session-checkpoint-policy` — requires `llm` · `sessionPersistence` · `sessions` · `tools` ([`packages/session/session-checkpoint-policy/src/index.ts`](../packages/session/session-checkpoint-policy/src/index.ts))
 - `@deepseek-ai/dsh-session-projection` ([`packages/session/session-projection/src/index.ts`](../packages/session/session-projection/src/index.ts))
-- `@deepseek-ai/dsh-session-stats` — requires `sessionProjections` ([`packages/session/session-stats/src/index.ts`](../packages/session/session-stats/src/index.ts))
 - `@deepseek-ai/dsh-session-turn-outline` — requires `sessionProjections` ([`packages/session/session-turn-outline/src/index.ts`](../packages/session/session-turn-outline/src/index.ts))
 - `@deepseek-ai/dsh-skill-badge` — requires `skills` ([`packages/skill/skill-badge/src/index.ts`](../packages/skill/skill-badge/src/index.ts))
 - `@deepseek-ai/dsh-storage` ([`packages/storage/storage/src/index.ts`](../packages/storage/storage/src/index.ts))
