@@ -64,6 +64,7 @@ The kernel packages boot and serve the page; the UI feature packages present it.
 | [`ui-schedule/`](ui-schedule/README.md) | Lists the current Session's active reminders in a read-only header catalog | — |
 | [`ui-jobs/`](ui-jobs/README.md) | Lists this session's background jobs in the conversation header | — |
 | [`ui-model-selection/`](ui-model-selection/README.md) | Provides model selection in conversation surfaces | — |
+| [`ui-observability/`](ui-observability/README.md) | Read-side session observability dashboard over existing session projections | — |
 | [`ui-permission-presets/`](ui-permission-presets/README.md) | Configures default permissions and switches the current session's access | — |
 | [`ui-plan/`](ui-plan/README.md) | Presents active plan-mode status and its exit control | — |
 | [`ui-settings-plugins/`](ui-settings-plugins/README.md) | Owns the Plugins settings section, its tab extension point, and configurable host-plane plugin cards | — |

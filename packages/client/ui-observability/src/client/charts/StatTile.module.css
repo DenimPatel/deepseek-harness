@@ -1,0 +1,29 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--dsw-alias-bg-layer-2);
+}
+
+.label {
+  overflow: hidden;
+  color: var(--dsw-alias-label-caption);
+  font: var(--dsw-font-xs-13);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.value {
+  color: var(--dsw-alias-label-primary);
+  font: var(--dsw-font-s-14);
+  font-variant-numeric: tabular-nums;
+}
+
+.hint {
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xs-13);
+  font-variant-numeric: tabular-nums;
+}

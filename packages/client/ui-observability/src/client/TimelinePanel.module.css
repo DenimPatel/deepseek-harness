@@ -1,0 +1,78 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.control {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.controlLabel {
+  color: var(--dsw-alias-label-caption);
+  font: var(--dsw-font-xs-13);
+}
+
+.select {
+  min-width: 0;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: 6px;
+  padding: 3px 6px;
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-primary);
+  font: var(--dsw-font-xs-13);
+}
+
+.summary {
+  margin: 0;
+  color: var(--dsw-alias-label-caption);
+  font: var(--dsw-font-xs-13);
+}
+
+.title {
+  margin: 0;
+  color: var(--dsw-alias-label-primary);
+  font: var(--dsw-font-xs-13);
+  font-weight: 600;
+}
+
+.empty {
+  margin: 0;
+  color: var(--dsw-alias-label-caption);
+  font: var(--dsw-font-xs-13);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xs-13);
+  font-variant-numeric: tabular-nums;
+}
+
+.table th,
+.table td {
+  padding: 2px 0;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l1);
+  text-align: left;
+  font-weight: 400;
+}
+
+.table thead th {
+  color: var(--dsw-alias-label-caption);
+}
+
+.table td {
+  text-align: right;
+  color: var(--dsw-alias-label-primary);
+}

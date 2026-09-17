@@ -64,6 +64,7 @@ kind: "package-group"
 | [`ui-schedule/`](ui-schedule/README.zh.md) | 在只读标题栏目录中列出当前会话中生效的提醒 | — |
 | [`ui-jobs/`](ui-jobs/README.zh.md) | 在会话标题栏列出当前会话的后台任务 | — |
 | [`ui-model-selection/`](ui-model-selection/README.zh.md) | 在对话界面中提供模型选择 | — |
+| [`ui-observability/`](ui-observability/README.zh.md) | 基于既有会话投影的只读会话可观测性面板 | — |
 | [`ui-permission-presets/`](ui-permission-presets/README.zh.md) | 配置默认权限并切换当前会话的访问模式 | — |
 | [`ui-plan/`](ui-plan/README.zh.md) | 展示生效中的 plan mode 状态及其退出控件 | — |
 | [`ui-settings-plugins/`](ui-settings-plugins/README.zh.md) | 负责「插件」设置分区、其标签页扩展点与可配置的宿主平面插件卡片 | — |

@@ -104,6 +104,7 @@ const SENTENCE_MODEL_EXPERIENCE: Readonly<Record<string, SentenceContract>> = {
   'packages/client/ui-message-feedback': { kind: 'none', reason: 'Browser-side controls over log-only message feedback; ratings and notes never enter model context or change model-input tokens.' },
   'packages/client/ui-tool': { kind: 'none', reason: 'Browser-side Tool presentation layer; renders logged calls without changing model context.' },
   'packages/client/ui-jobs': { kind: 'none', reason: 'Browser-side read-only projection of ctx.jobs records; dsh-tool-jobs owns the model-facing behavior.' },
+  'packages/client/ui-observability': { kind: 'none', reason: 'Browser-side read-only dashboard over existing session projections; registers nothing model-facing.' },
   'packages/api/git-worktree-controller': { kind: 'none', reason: 'Host worktree control forwarded to Remote callers; the git service and the filesystem tools it isolates own every model-visible effect.' },
   'packages/client/ui-workspace-worktree': { kind: 'none', reason: 'Browser-side worktree surface driving ctx.gitWorktrees; the checkouts it manages change model-visible files only through the Session that edits them.' },
   'packages/client/ui-schedule': { kind: 'none', reason: 'Browser-side read-only projection of active Schedule records; dsh-schedule owns the model-facing tools and delivery.' },

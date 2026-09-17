@@ -2,7 +2,8 @@
  * REAL-composition proof: the shipped YAML shape (session + projection
  * registry + session-stats) boots through the vendored Loader, the function
  * plugin's namespace survives (no default export), and a full logged turn
- * serves `{turns: 1, steps: 1}` through the composed registry.
+ * serves `{turns: 1, steps: 1}` plus the activity histogram through the
+ * composed registry.
  */
 
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
@@ -74,8 +75,12 @@ describe('real Loader composition', () => {
     session.append('step/start', { turn: 1, step: 1 })
     session.append('step/end', { turn: 1, step: 1 })
     session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
-    expect(loaded.sessionProjections.snapshot(session).values.sessionStats)
-      .toMatchObject({ turns: 1, steps: 1 })
+    const values = loaded.sessionProjections.snapshot(session).values
+    expect(values.sessionStats).toMatchObject({ turns: 1, steps: 1 })
+    // Both units of the plugin register through the composed seam, and the
+    // activity histogram serves its configured default width.
+    expect(values.activitySeries?.series.stepsClosed.reduce((sum, count) => sum + count, 0)).toBe(1)
+    expect(values.activitySeries?.series.turnsStarted.reduce((sum, count) => sum + count, 0)).toBe(1)
   })
 
   it('keeps the function-plugin namespace free of a default export', () => {

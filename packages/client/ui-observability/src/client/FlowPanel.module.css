@@ -1,0 +1,142 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.empty {
+  margin: 0;
+  color: var(--dsw-alias-label-caption);
+  font: var(--dsw-font-xs-13);
+}
+
+.loadOlder {
+  align-self: flex-start;
+  border: 0;
+  padding: 0;
+  background: none;
+  color: var(--dsw-alias-state-business-primary);
+  font: var(--dsw-font-xs-13);
+  cursor: pointer;
+}
+
+.loadOlder:disabled {
+  color: var(--dsw-alias-label-caption);
+  cursor: default;
+}
+
+.turn {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding-bottom: 10px;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l1);
+}
+
+.turnHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.turnTitle {
+  margin: 0;
+  color: var(--dsw-alias-label-primary);
+  font: var(--dsw-font-xs-13);
+  font-weight: 600;
+}
+
+.turnMeta {
+  color: var(--dsw-alias-label-caption);
+  font: var(--dsw-font-xs-13);
+}
+
+.rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.rowHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.role {
+  border-radius: 4px;
+  padding: 1px 5px;
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xs-13);
+}
+
+.name {
+  color: var(--dsw-alias-label-primary);
+  font: var(--dsw-font-xs-13);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.chip {
+  color: var(--dsw-alias-label-caption);
+  font: var(--dsw-font-xs-13);
+}
+
+.stateRunning {
+  color: var(--dsw-alias-label-caption);
+  font: var(--dsw-font-xs-13);
+}
+
+.stateError {
+  color: var(--dsw-alias-state-error-primary);
+  font: var(--dsw-font-xs-13);
+}
+
+.summary {
+  margin: 0;
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xs-13);
+  overflow-wrap: anywhere;
+}
+
+.detailToggle {
+  align-self: flex-start;
+  border: 0;
+  padding: 0;
+  background: none;
+  color: var(--dsw-alias-state-business-primary);
+  font: var(--dsw-font-xs-13);
+  cursor: pointer;
+}
+
+.detailLabel {
+  margin: 0;
+  color: var(--dsw-alias-label-caption);
+  font: var(--dsw-font-xs-13);
+}
+
+.detail {
+  margin: 0;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xs-13);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

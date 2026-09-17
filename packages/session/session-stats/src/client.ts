@@ -8,3 +8,5 @@
  */
 
 export type * from './types.ts'
+export type * from './activity-types.ts'
+export type * from './activity-metrics.ts'
