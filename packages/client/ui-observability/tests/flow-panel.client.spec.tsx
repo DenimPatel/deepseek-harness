@@ -143,6 +143,7 @@ describe('FlowPanel', () => {
     // Facts the record does not carry stay out of the table.
     expect(within(requestRow).queryByText(zh['flow.request.retry'])).toBeNull()
     expect(within(requestRow).queryByText(zh['flow.request.tokens'])).toBeNull()
+    expect(within(requestRow).queryByText(zh['flow.request.cacheHit'])).toBeNull()
   })
 
   it('renders only the request facts a running request actually recorded', () => {
@@ -151,6 +152,9 @@ describe('FlowPanel', () => {
     if (runningRow === null || runningRow === undefined) throw new Error('expected a second request row')
     fireEvent.click(within(runningRow).getByRole('button', { name: zh['flow.detail.show'] }))
     expect(within(runningRow).getByText(zh['flow.request.tokens'])).toBeTruthy()
+    // Uncached input and no cache reads: a 0% cache-hit rate, not an omitted fact.
+    expect(within(runningRow).getByText(zh['flow.request.cacheHit'])).toBeTruthy()
+    expect(within(runningRow).getByText(zh['value.percent'].replace('{value}', '0.0'))).toBeTruthy()
     expect(within(runningRow).getByText(zh['flow.request.retry'])).toBeTruthy()
     // No prompt snapshot means no catalog, no system prompt, and no duration yet.
     expect(within(runningRow).queryByText(zh['flow.request.temperature'])).toBeNull()

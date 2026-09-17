@@ -13,7 +13,7 @@
 import { Fragment, useMemo, useState } from 'react'
 import type { UseTrajectory } from '@deepseek-ai/dsh-client-ui-trajectory/client'
 import type { ObservabilityTranslate } from './format.ts'
-import { formatDuration, formatTokens } from './format.ts'
+import { formatDuration, formatRatio, formatTokens } from './format.ts'
 import { buildFlow } from './flow-model.ts'
 import type { FlowPromptChange, FlowRequestDetail, FlowRow, FlowToolDetail } from './flow-model.ts'
 import type { ObservabilityKey } from './locales.ts'
@@ -61,9 +61,16 @@ const REQUEST_FACTS: readonly {
     value: (detail, t) => detail.tokens === undefined
       ? undefined
       : t('flow.request.tokens', {
-        input: formatTokens(detail.tokens.input, t),
-        output: formatTokens(detail.tokens.output, t),
+        input: formatTokens(
+          detail.tokens.uncachedInputTokens + detail.tokens.cacheReadTokens + detail.tokens.cacheWriteTokens,
+          t,
+        ),
+        output: formatTokens(detail.tokens.outputTokens, t),
       }),
+  },
+  {
+    key: 'flow.request.cacheHit',
+    value: (detail, t) => detail.cacheHitRatio === undefined ? undefined : formatRatio(detail.cacheHitRatio, t),
   },
   { key: 'flow.request.retry', value: detail => detail.retry },
 ]

@@ -22,6 +22,8 @@ import type {
   ToolResultNode,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { TrajectorySnapshot } from '@deepseek-ai/dsh-client-ui-trajectory/client'
+import { cacheHitRatio } from './format.ts'
+import type { TokenUsageBuckets } from './format.ts'
 import type { ObservabilityKey } from './locales.ts'
 
 /** Longest preview the ledger keeps on one line before it needs expansion. */
@@ -95,8 +97,10 @@ export interface FlowRequestDetail {
   readonly system?: string
   /** Wall time from issue to settlement, when the request settled. */
   readonly durationMs?: number
-  /** Token totals the settlement reported, when it reported any. */
-  readonly tokens?: { readonly input: number; readonly output: number }
+  /** Disjoint token buckets the settlement reported, when it reported any. */
+  readonly tokens?: TokenUsageBuckets
+  /** Cache-read share of billed prompt tokens, when the settlement reported billed input. */
+  readonly cacheHitRatio?: number | null
   /** Retry ordinal this request ran as, as `n` or `n/max`, when it was a retry. */
   readonly retry?: string
 }
@@ -367,19 +371,21 @@ function nonNegative(value: unknown): number | null {
 }
 
 /**
- * The token totals one settled request reported.
+ * The disjoint token buckets one settled request reported.
  * @param usage - the request record's optional usage value.
- * @returns prompt-side and output totals, or `undefined` when it reported none.
+ * @returns uncached input, output, and cache buckets, or `undefined` when it reported neither input nor output.
  */
-function usageTotals(usage: unknown): { input: number; output: number } | undefined {
+function usageTotals(usage: unknown): TokenUsageBuckets | undefined {
   if (typeof usage !== 'object' || usage === null) return undefined
   const record = usage as Record<string, unknown>
   const input = nonNegative(record.inputTokens)
   const output = nonNegative(record.outputTokens)
   if (input === null && output === null) return undefined
   return {
-    input: (input ?? 0) + (nonNegative(record.cacheReadTokens) ?? 0) + (nonNegative(record.cacheWriteTokens) ?? 0),
-    output: output ?? 0,
+    uncachedInputTokens: input ?? 0,
+    outputTokens: output ?? 0,
+    cacheReadTokens: nonNegative(record.cacheReadTokens) ?? 0,
+    cacheWriteTokens: nonNegative(record.cacheWriteTokens) ?? 0,
   }
 }
 
@@ -420,7 +426,7 @@ function requestDetail(request: RequestView): FlowRequestDetail | undefined {
     tools: (snapshot?.tools ?? []).map(tool => tool.name),
     ...system === undefined ? {} : { system },
     ...durationMs === undefined ? {} : { durationMs },
-    ...tokens === undefined ? {} : { tokens },
+    ...tokens === undefined ? {} : { tokens, cacheHitRatio: cacheHitRatio(tokens) },
     ...retry === undefined ? {} : { retry },
   }
   const empty = detail.provider === undefined
