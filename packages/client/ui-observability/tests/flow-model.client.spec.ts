@@ -334,7 +334,8 @@ describe('buildFlow', () => {
       model: 'v5',
       tools: [],
       durationMs: 100,
-      tokens: { input: 13, output: 4 },
+      tokens: { uncachedInputTokens: 10, outputTokens: 4, cacheReadTokens: 2, cacheWriteTokens: 1 },
+      cacheHitRatio: 2 / 12,
       retry: '2/3',
     })
     // A running compaction request records no configuration and no prompt.
@@ -347,7 +348,11 @@ describe('buildFlow', () => {
       .filter(row => row.role === 'flow.role.request')
       .map(row => row.request)
       .find(detail => detail?.model === 'v6')
-    expect(request).toMatchObject({ tokens: { input: 1, output: 2 }, retry: '1' })
+    expect(request).toMatchObject({
+      tokens: { uncachedInputTokens: 0, outputTokens: 2, cacheReadTokens: 1, cacheWriteTokens: 0 },
+      cacheHitRatio: 1,
+      retry: '1',
+    })
   })
 
   it('reads a report without an output figure as no output tokens', () => {
@@ -355,7 +360,10 @@ describe('buildFlow', () => {
       .filter(row => row.role === 'flow.role.request')
       .map(row => row.request)
       .find(detail => detail?.model === 'v7')
-    expect(request).toMatchObject({ tokens: { input: 3, output: 0 } })
+    expect(request).toMatchObject({
+      tokens: { uncachedInputTokens: 3, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 },
+      cacheHitRatio: 0,
+    })
   })
 
   it('keeps a turn-scoped record at its turn and inherits the step in force', () => {
