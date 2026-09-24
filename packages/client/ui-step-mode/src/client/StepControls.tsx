@@ -12,7 +12,7 @@ import css from './StepControls.module.css'
  * @returns The pause strip, or null.
  */
 export function StepControls(props: StepControlsProps) {
-  const pending = props.useSessionPendingInteraction(interactions => interactions.get(props.sessionId))
+  const pending = props.useSessionStatus(statuses => statuses.get(props.sessionId)?.pendingInteraction)
   return pending instanceof PendingStepPause
     ? <StepControlsStrip key={pending.key} pause={pending} stop={props.stop} t={props.t} />
     : null

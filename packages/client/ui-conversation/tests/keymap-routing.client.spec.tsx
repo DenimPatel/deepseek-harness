@@ -8,7 +8,6 @@ import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { fireEvent } from '@testing-library/react'
 import { createEditor } from 'lexical'
 import { registerPlainText } from '@lexical/plain-text'
-import type { ComposerKeyboard } from '../src/client/contract/draft-editor.ts'
 import { registerComposerKeymap } from '../src/client/input/editor/keymap.ts'
 import { installDraftKeymap } from '../src/client/input/editor/view-binding.ts'
 
@@ -121,6 +120,10 @@ describe('keymap keydown routing', () => {
     expect(picked).toBe(false) // picked: the completion replaces native traversal
     const passed = fireEvent.keyDown(root, { key: 'Tab', keyCode: 9 })
     expect(passed).toBe(true) // pass: the browser keeps native focus traversal
+
+    // Shift+Tab is the menu's exit key, never its settle key.
+    fireEvent.keyDown(root, { key: 'Tab', keyCode: 9, shiftKey: true })
+    expect(arbitrate).toHaveBeenLastCalledWith('tabBack', false)
   })
 })
 
@@ -162,7 +165,8 @@ describe('step gesture routing', () => {
       dismissPopup: () => {},
       steerQueue,
       submit,
-    } as unknown as ComposerKeyboard, gate as never)
+      paste: () => {},
+    }, gate as never)
     return { root, submit, steerQueue, showToast }
   }
 

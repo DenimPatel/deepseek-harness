@@ -17,8 +17,8 @@ const LONG_TEXT = 'y'.repeat(200)
 
 afterEach(cleanup)
 
-const SNAPSHOT = {
-  systemPrompts: [{ seq: 50, time: 100, turn: 1, step: 1, text: LONG_TEXT }],
+const SNAPSHOT: TrajectorySnapshot = {
+  systemPrompts: [{ seq: 50, time: 100, turn: 1, step: 1, text: LONG_TEXT, update: false }],
   eventNodes: [
     { kind: 'user', seq: 1, time: 1_000, source: null, content: [{ type: 'text', text: 'hello harness' }] },
     {
@@ -26,13 +26,15 @@ const SNAPSHOT = {
       blocks: [{ kind: 'reasoning', text: 'weighing options' }, { kind: 'text', text: 'working on it' }],
     },
     {
-      kind: 'tool-result', seq: 4, time: 2_050, turn: 1, step: 2, callId: 'c0', callTime: 2_010,
+      kind: 'tool-result', seq: 4, time: 2_050, callId: 'c0', callTime: 2_010,
       isError: true, subCalls: [], call: null,
       content: [{ type: 'text', text: 'permission denied' }],
     },
     {
       kind: 'tool-result', seq: 5, time: 2_060, callId: 'c1', callTime: 2_055, isError: false,
-      subCalls: [{ name: 'inner', argsRaw: '{"deep":true}' }],
+      subCalls: [{
+        phase: 'start', callId: 'c1a', name: 'inner', argsRaw: '{"deep":true}', turn: 1, step: 2, time: 2_056, subCalls: [],
+      }],
       call: { name: 'read', argsRaw: '{"path":"x"}' },
       content: [{ type: 'text', text: LONG_TEXT }],
     },
@@ -63,8 +65,8 @@ const SNAPSHOT = {
   }],
   callSchemas: new Map(),
   partial: null,
-  runningCalls: [{ callId: 'c2', name: 'grep', argsRaw: '{"q":"x"}', turn: 1, step: 2, time: 2_300, subCalls: [] }],
-} as unknown as TrajectorySnapshot
+  runningCalls: [{ phase: 'start', callId: 'c2', name: 'grep', argsRaw: '{"q":"x"}', turn: 1, step: 2, time: 2_300, subCalls: [] }],
+}
 
 const seat = (snapshot: TrajectorySnapshot): UseTrajectory => selector => selector(snapshot)
 

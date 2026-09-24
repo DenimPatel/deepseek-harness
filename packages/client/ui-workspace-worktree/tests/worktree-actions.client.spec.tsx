@@ -59,7 +59,7 @@ function createProps(over: {
     probe: over.probe ?? vi.fn(async () => probeValue()),
     create: over.create ?? vi.fn(async () => createValue()),
     startSessionInWorktree: over.startSessionInWorktree ?? vi.fn(),
-  } as unknown as WorktreeCreateActionProps
+  } as WorktreeCreateActionProps
 }
 
 describe('WorktreeCreateAction', () => {
@@ -217,7 +217,7 @@ function rowProps(over: {
     merge: over.merge ?? vi.fn(async () => ({ merged: true, targetRef: 'refs/heads/main', conflicts: [] })),
     discard: over.discard ?? vi.fn(async () => undefined),
     forgetWorkspace: over.forgetWorkspace ?? vi.fn(async () => undefined),
-  } as unknown as WorktreeRowActionsProps
+  } as WorktreeRowActionsProps
 }
 
 describe('WorktreeRowActions', () => {
@@ -386,7 +386,7 @@ function headerProps(over: {
     status: over.status ?? vi.fn(async () => statusValue()),
     merge: over.merge ?? vi.fn(async () => ({ merged: true, targetRef: 'refs/heads/main', conflicts: [] })),
     discard: over.discard ?? vi.fn(async () => undefined),
-  } as unknown as SessionHeaderWorktreeProps
+  } as SessionHeaderWorktreeProps
 }
 
 function headerControl(): HTMLElement {

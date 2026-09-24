@@ -22,8 +22,8 @@ function histogram(
     originMs: options.originMs === undefined ? 0 : options.originMs,
     bucketMs: options.bucketMs ?? 5_000,
     series: Object.fromEntries(
-      ACTIVITY_METRICS.map(metric => [metric.id, [...(columns[metric.id] ?? [])]]),
-    ) as unknown as ActivitySeriesProjection['series'],
+      ACTIVITY_METRICS.map((metric): [string, readonly number[]] => [metric.id, [...(columns[metric.id] ?? [])]]),
+    ) as ActivitySeriesProjection['series'],
   }
 }
 

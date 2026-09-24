@@ -82,12 +82,11 @@ describe('PendingStepPause', () => {
   })
 
   it('uses a stable fallback when the abort carries no reason', async () => {
-    const signal = {
-      aborted: true,
-      reason: undefined,
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-    } as unknown as AbortSignal
+    // A real aborted signal always carries a reason, so only the reason is replaced.
+    const controller = new AbortController()
+    controller.abort()
+    const signal = controller.signal
+    Object.defineProperty(signal, 'reason', { value: undefined })
 
     const pending = pause({ signal })
 
@@ -113,7 +112,7 @@ describe('StepPauseComposer', () => {
   function renderComposer(pending: PendingStepPause, stop = vi.fn()): void {
     render(<StepPauseComposer {...({
       matched: pending, stop, t: translate as Translate,
-    } as unknown as StepPauseComposerProps)} />)
+    } as StepPauseComposerProps)} />)
   }
 
   it('names a held model request and advances on the button', async () => {
@@ -161,7 +160,7 @@ describe('StepPauseComposer', () => {
     const stop = vi.fn()
     render(<StepPauseComposer {...({
       matched: resumePending, stop, t: translate as Translate,
-    } as unknown as StepPauseComposerProps)} />)
+    } as StepPauseComposerProps)} />)
     fireEvent.click(screen.getByRole('button', { name: /resume/ }))
     await expect(resumePending.result).resolves.toEqual({ action: 'resume' })
 
@@ -169,7 +168,7 @@ describe('StepPauseComposer', () => {
     const stopPending = pause()
     render(<StepPauseComposer {...({
       matched: stopPending, stop, t: translate as Translate,
-    } as unknown as StepPauseComposerProps)} />)
+    } as StepPauseComposerProps)} />)
     fireEvent.click(screen.getByRole('button', { name: /stop/ }))
     expect(stop).toHaveBeenCalledOnce()
     stopPending.delegate()
@@ -205,7 +204,7 @@ describe('StepRunButton', () => {
       inputActions: { submit },
       useInput: (selector: (value: typeof state) => unknown) => selector(state),
       t: translate as Translate,
-    } as unknown as StepRunButtonProps)} />)
+    } as StepRunButtonProps)} />)
     return { submit }
   }
 
@@ -269,9 +268,9 @@ describe('StepControls', () => {
       sessionId: SESSION_ID,
       stop,
       t: translate as Translate,
-      useSessionPendingInteraction: (selector: (value: Map<SessionId, unknown>) => unknown) =>
-        selector(new Map<SessionId, unknown>(pending === undefined ? [] : [[SESSION_ID, pending]])),
-    } as unknown as StepControlsProps)} />)
+      useSessionStatus: (selector: (value: Map<SessionId, unknown>) => unknown) =>
+        selector(new Map<SessionId, unknown>(pending === undefined ? [] : [[SESSION_ID, { pendingInteraction: pending }]])),
+    } as StepControlsProps)} />)
   }
 
   it('renders nothing while the Session is not paused', () => {
@@ -284,9 +283,9 @@ describe('StepControls', () => {
       sessionId: SESSION_ID,
       stop: vi.fn(),
       t: translate as Translate,
-      useSessionPendingInteraction: (selector: (value: Map<SessionId, unknown>) => unknown) =>
-        selector(new Map([[SESSION_ID, { kind: 'approval', key: 'a', sessionId: SESSION_ID }]])),
-    } as unknown as StepControlsProps)} />)
+      useSessionStatus: (selector: (value: Map<SessionId, unknown>) => unknown) =>
+        selector(new Map([[SESSION_ID, { pendingInteraction: { kind: 'approval', key: 'a', sessionId: SESSION_ID } }]])),
+    } as StepControlsProps)} />)
     expect(screen.queryByText(/paused/)).toBeNull()
   })
 

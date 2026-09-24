@@ -26,12 +26,12 @@ const noData = { get: () => undefined, source: () => ({ getSnapshot: () => undef
 function at(turn: number, step?: number): ConversationLocation {
   const turnLocation = {
     turn, start: undefined, end: undefined, status: 'closed', steps: [], data: noData,
-  } as unknown as TurnLocation
+  } as TurnLocation
   if (step === undefined) return { kind: 'turn', turn: turnLocation }
   return {
     kind: 'step',
     turn: turnLocation,
-    step: { turn, step, start: undefined, end: undefined, status: 'closed', data: noData } as unknown as StepLocation,
+    step: { turn, step, start: undefined, end: undefined, status: 'closed', data: noData } as StepLocation,
   }
 }
 
@@ -48,7 +48,6 @@ const NODES: readonly ConversationNode[] = [
     content: [
       { type: 'text', text: 'workspace instructions' },
       { type: 'tool-call', name: 'recall', arguments: '{}' },
-      { type: 'tool-result', toolCallId: 'c9', content: [{ type: 'text', text: 'recalled' }] },
       { type: 'image', attachment: { id: 'a1' } },
     ],
   }),
@@ -71,7 +70,7 @@ const NODES: readonly ConversationNode[] = [
   node({
     kind: 'tool-result', seq: 5, time: 1_400, callId: 'c2', call: null, callTime: null, isError: true,
     subCalls: [
-      { name: 'nested', argsRaw: '{"deep":true}' },
+      { phase: 'start', name: 'nested', argsRaw: '{"deep":true}' },
       {
         kind: 'tool-result', seq: 5.1, time: 1_410, callId: 'c3', call: { name: 'inner', argsRaw: '{"x":1}' },
         callTime: 1_405, content: [], isError: false, subCalls: [],
@@ -81,7 +80,7 @@ const NODES: readonly ConversationNode[] = [
         callTime: null, content: [], isError: false, subCalls: [],
       },
     ],
-    content: [{ type: 'tool-result', toolCallId: 'c3', content: [{ type: 'text', text: 'nested' }] }],
+    content: [{ type: 'text', text: 'nested' }],
   }),
   node({ kind: 'command', seq: 6, time: 1_500, commandId: 'cmd1', name: null, args: '--flag', outcome: null }),
   node({
@@ -185,7 +184,7 @@ const SNAPSHOT: TrajectorySnapshot = {
   callSchemas: new Map(),
   partial: { turn: 2, step: 1, blocks: [{ kind: 'text', text: 'streaming now' }] },
   runningCalls: [
-    { callId: 'c3', name: 'read', argsRaw: '{"path":"x"}', turn: 2, step: 1, time: 4_200, subCalls: [] },
+    { phase: 'start', callId: 'c3', name: 'read', argsRaw: '{"path":"x"}', turn: 2, step: 1, time: 4_200, subCalls: [] },
   ],
 }
 
@@ -218,11 +217,11 @@ describe('buildFlow', () => {
       .toBe('describe how does this repo work.')
     expect(byTurn.get(null)?.rows.find(row => row.role === 'flow.role.steering')?.summary).toBe('steer left')
     const context = byTurn.get(1)?.rows.find(row => row.role === 'flow.role.context')
-    // The producer label is absent, so the role name stands in; the nested
-    // tool-result text is part of the record's text.
+    // The producer label is absent, so the role name stands in; a nested
+    // tool call contributes its name to the record's text.
     expect(context?.name).toBe('instructions')
     expect(context?.summary).toContain('workspace instructions')
-    expect(context?.summary).toContain('recalled')
+    expect(context?.summary).toContain('recall')
   })
 
   it('carries assistant reasoning, text, and the interrupted state', () => {
@@ -406,5 +405,23 @@ describe('buildFlow', () => {
     expect(turns).toHaveLength(1)
     expect(turns[0]).toMatchObject({ turn: 1, time: 0, messages: 1 })
     expect(turns[0]?.rows[0]).toMatchObject({ summary: 'starting', state: 'running' })
+  })
+
+  it('reads a call still preparing its arguments by name alone', () => {
+    const preparing = { phase: 'preparing', callId: 'p1', name: 'edit', turn: 1, step: 1, time: 900, subCalls: [] } as const
+    const turns = buildFlow({
+      eventNodes: [node({
+        kind: 'tool-result', seq: 3, time: 1_000, callId: 'c1', call: { name: 'run', argsRaw: '{}' },
+        callTime: 950, isError: false, content: [], subCalls: [preparing],
+      })],
+      eventLocations: new Map([[3, at(1, 1)]]),
+      requests: [],
+      callSchemas: new Map(),
+      partial: null,
+      runningCalls: [preparing],
+    })
+    const rows = turns[0]?.rows ?? []
+    expect(rows.find(row => row.name === 'run')?.tool?.subCalls).toEqual(['edit'])
+    expect(rows.find(row => row.key === 'call:p1')).toMatchObject({ name: 'edit', state: 'running', detail: '' })
   })
 })

@@ -144,9 +144,7 @@ function countEvent(event: SessionEvent): ActivitySample | null {
     case 'tool/call':
       return { additions: { toolCalls: 1 } }
     case 'tool/result':
-      return event.data.message.content.some(block => block.isError === true)
-        ? { additions: { toolErrors: 1 } }
-        : null
+      return event.data.message.isError === true ? { additions: { toolErrors: 1 } } : null
     case 'assistant/message':
       return messageSample(event.data.usage)
     default:

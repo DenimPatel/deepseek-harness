@@ -110,7 +110,7 @@ Each code is a distinct recovery: `invalid-name`, `path-exists`, and `branch-exi
 
 ### No invariant companion
 
-This package publishes no `./invariant`. The relation worth checking — every durable worktree record has a matching entry in its parent repository's `git worktree list` — spans two owners: the workspace registry holds the durable records and this service observes git. Neither can observe the other's half, so the check belongs to the composition that owns both, not to this package ([package invariant rules](../../AGENTS.md)).
+No invariant companion is published: this package ships no `./invariant`. The relation worth checking — every durable worktree record has a matching entry in its parent repository's `git worktree list` — spans two owners: the workspace registry holds the durable records and this service observes git. Neither can observe the other's half, so the check belongs to the composition that owns both, not to this package ([package invariant rules](../../AGENTS.md)).
 
 </details>
 

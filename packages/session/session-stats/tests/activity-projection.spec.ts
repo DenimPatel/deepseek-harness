@@ -32,11 +32,11 @@ function definition(policy: Partial<ActivitySeriesConfig> = {}) {
 type State = Parameters<ReturnType<typeof definition>['apply']>[0]
 
 /** The registry's seeding arguments; this unit reads neither of them. */
-const SEED_ARGS = [{ id: 'activity' } as unknown as SessionHeader, SessionLogOffset(0)] as const
+const SEED_ARGS = [{ id: 'activity' } as SessionHeader, SessionLogOffset(0)] as const
 
 /** Build one synthetic committed event with a controlled timestamp. */
 function at(time: number, type: string, data: unknown): SessionEvent {
-  return { type, seq: time, time, data } as unknown as SessionEvent
+  return { type, seq: time, time, data } as SessionEvent
 }
 
 /** One settled assistant message carrying the supplied usage record. */
@@ -55,7 +55,7 @@ function toolResultAt(time: number, failed: boolean): SessionEvent {
   return at(time, 'tool/result', {
     turn: 1,
     step: 1,
-    message: { content: [{ type: 'tool-result', isError: failed }] },
+    message: { role: 'tool', callId: 'c', content: [], isError: failed },
   })
 }
 

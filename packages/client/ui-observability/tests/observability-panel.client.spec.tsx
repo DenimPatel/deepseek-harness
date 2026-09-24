@@ -22,8 +22,8 @@ function histogram(columns: Partial<Record<ActivityMetricId, readonly number[]>>
     originMs: 0,
     bucketMs: 5_000,
     series: Object.fromEntries(
-      ACTIVITY_METRICS.map(metric => [metric.id, [...(columns[metric.id] ?? [])]]),
-    ) as unknown as ActivitySeriesProjection['series'],
+      ACTIVITY_METRICS.map((metric): [string, readonly number[]] => [metric.id, [...(columns[metric.id] ?? [])]]),
+    ) as ActivitySeriesProjection['series'],
   }
 }
 
@@ -48,7 +48,7 @@ function props(over: {
     loadOlder: () => Promise.resolve(false),
     renderSlot: (key: string) => key === 'sidebar.right.pane.tab.controls' ? over.controls ?? null : null,
     t,
-  } as unknown as ObservabilityPanelProps
+  } as ObservabilityPanelProps
 }
 
 const FIGURES = {
@@ -108,7 +108,7 @@ describe('ObservabilityPanel', () => {
         callSchemas: new Map(),
         partial: null,
         runningCalls: [],
-      } as unknown as TrajectorySnapshot,
+      } as TrajectorySnapshot,
     })} />)
     fireEvent.click(screen.getByRole('tab', { name: zh['view.flow'] }))
     expect(screen.getByText(zh['flow.betweenTurns'])).toBeTruthy()

@@ -17,7 +17,11 @@ const CHILD = 'child' as SessionId
 const GRANDCHILD = 'grandchild' as SessionId
 
 function summary(id: SessionId, over: Partial<SessionSummary> = {}): SessionSummary {
-  return { id, updatedAt: 1, running: false, blank: false, displayTitle: `title:${id}`, ...over }
+  return {
+    id, updatedAt: 1, running: false, blank: false, displayTitle: `title:${id}`,
+    ...over,
+    retainedBy: over.retainedBy ?? {},
+  }
 }
 
 function usage(input: number, output: number) {

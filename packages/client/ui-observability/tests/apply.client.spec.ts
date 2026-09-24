@@ -51,7 +51,7 @@ async function boot(options: {
     if (options.moves !== false) snapshots.current = { marks: ['moved'] }
     return Promise.resolve()
   })
-  const snapshots = { current: { marks: ['a'] } as unknown }
+  const snapshots: { current: unknown } = { current: { marks: ['a'] } }
   const target = { getSnapshot: () => snapshots.current, subscribe: () => () => {} }
   const sessions = { binding: vi.fn(() => options.bound === false ? undefined : { session: { loadOlder } }) }
   const uiConversation = { binding: vi.fn(() => ({ target: () => target })) }

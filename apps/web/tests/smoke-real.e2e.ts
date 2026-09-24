@@ -356,13 +356,13 @@ describe('dsh web keyless CLI smoke', () => {
       await page.goto(readyUrl)
       await page.getByRole('button', { name: 'New session', exact: true }).first().waitFor({ timeout: 30_000 })
       const batchPaths = [...new Set(pluginScripts)].sort()
-      // The application phase is partitioned against a 3 KiB combo-URL budget,
-      // which the client rows now fill twice; the parser-preload batch carries
-      // the modules row alone.
-      expect(batchPaths).toHaveLength(3)
-      expect(batchPaths).toContainEqual(expect.stringMatching(
-        /^\/plugins\/\?\?.+\/client\.js,.+\/client\.js&rev=[a-f\d]{12}$/,
+      // The bootstrap phase is the modules package alone; the application phase
+      // spans several combos because its map-form URL is over the 3 KiB combo limit.
+      const applicationBatches = batchPaths.filter(path => (
+        /^\/plugins\/\?\?.+\/client\.js,.+\/client\.js&rev=[a-f\d]{12}$/.test(path)
       ))
+      expect(applicationBatches.length).toBeGreaterThanOrEqual(2)
+      expect(batchPaths).toHaveLength(applicationBatches.length + 1)
       expect(batchPaths).toContainEqual(expect.stringMatching(
         /^\/plugins\/\?\?@deepseek-ai\/dsh-client-modules\/client\.js&rev=[a-f\d]{12}$/,
       ))

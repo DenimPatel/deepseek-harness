@@ -137,8 +137,6 @@ function contentBlockText(block: ContextMessageNode['content'][number]): string 
       return block.text
     case 'tool-call':
       return block.name
-    case 'tool-result':
-      return block.content.map(contentBlockText).join(' ')
     default:
       return ''
   }
@@ -192,7 +190,7 @@ function systemPromptRow(prompt: SystemPromptNode): FlowRow {
 
 /** One nested dispatch call, as its recorded name and arguments. */
 function subCallText(call: ToolCallBlock): string {
-  if ('argsRaw' in call) return `${call.name} ${call.argsRaw}`.trim()
+  if ('phase' in call) return call.phase === 'start' ? `${call.name} ${call.argsRaw}`.trim() : call.name
   return call.call === null ? call.callId : `${call.call.name} ${call.call.argsRaw}`.trim()
 }
 
@@ -494,7 +492,7 @@ function runningCallRow(call: RunningToolCall): FlowRow {
     name: call.name,
     summary: '',
     state: 'running',
-    detail: call.argsRaw,
+    detail: call.phase === 'start' ? call.argsRaw : '',
   }
 }
 

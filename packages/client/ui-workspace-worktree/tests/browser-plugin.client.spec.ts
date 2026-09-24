@@ -7,7 +7,8 @@
 import { Context } from '@deepseek-ai/cordis'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
-import { stubSettingsScope } from '@deepseek-ai/dsh-client-test-runtime'
+import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
+import { stubConfigForm } from '@deepseek-ai/dsh-client-test-runtime'
 import { apply as applyLocale, inject as localeInject } from '@deepseek-ai/dsh-client-locale/client'
 import { apply, inject, type WorktreeInjected } from '../src/client/index.ts'
 import { apply as applyNode } from '../src/index.ts'
@@ -68,7 +69,7 @@ async function bench(): Promise<{
   ctx.provide('uiWorkspace', { startSessionInWorktree } as never)
   ctx.provide('connection', { api: { settings: {} }, isLoopback: false } as never)
   ctx.provide('remote', { $on: () => () => {} } as never)
-  ctx.provide('settingsScope', { bind: () => stubSettingsScope().scope } as never)
+  ctx.provide('configForms', { developerTools: { enabled: createSnapshotStore(true) }, get: () => stubConfigForm().scope } as never)
   await ctx.plugin({ inject: localeInject, apply: applyLocale }).await()
   // These specs assert the shipped Chinese copy; there is no jsdom `window`
   // in this lane, so state the asserted locale explicitly.
@@ -77,11 +78,28 @@ async function bench(): Promise<{
   return { ctx, probe, create, status, merge, discard, startSessionInWorktree, forget }
 }
 
-/** The first registered entry's inject factory result; the registry erases the factory's type. */
+/**
+ * The first registered entry's inject factory result. The registry erases the
+ * factory's type, so each verb is read back as a function before use.
+ */
 function injected(ctx: Context, slot: (typeof SLOTS)[number]): WorktreeInjected {
   const entry = ctx.slots.entries(slot)[0]
-  if (entry === undefined) throw new Error(`no registration on ${slot}`)
-  return (entry.inject as unknown as () => WorktreeInjected)()
+  if (entry?.inject === undefined) throw new Error(`no inject factory on ${slot}`)
+  const face = entry.inject()
+  const verb = <K extends keyof WorktreeInjected>(key: K): WorktreeInjected[K] => {
+    const value = face[key]
+    if (typeof value !== 'function') throw new Error(`${slot} inject face lacks ${key}`)
+    return value as WorktreeInjected[K]
+  }
+  return {
+    probe: verb('probe'),
+    create: verb('create'),
+    status: verb('status'),
+    merge: verb('merge'),
+    discard: verb('discard'),
+    startSessionInWorktree: verb('startSessionInWorktree'),
+    forgetWorkspace: verb('forgetWorkspace'),
+  }
 }
 
 describe('ui-workspace-worktree browser half', () => {
@@ -117,7 +135,7 @@ describe('ui-workspace-worktree browser half', () => {
     ctx.provide('uiWorkspace', {} as never)
     ctx.provide('connection', { api: { settings: {} }, isLoopback: false } as never)
     ctx.provide('remote', { $on: () => () => {} } as never)
-    ctx.provide('settingsScope', { bind: () => stubSettingsScope().scope } as never)
+    ctx.provide('configForms', { developerTools: { enabled: createSnapshotStore(true) }, get: () => stubConfigForm().scope } as never)
     await ctx.plugin({ inject: localeInject, apply: applyLocale }).await()
     await ctx.plugin({ inject: [...inject], apply }).await()
     for (const slot of SLOTS) expect(ctx.slots.entries(slot)).toHaveLength(0)
